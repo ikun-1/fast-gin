@@ -1,0 +1,42 @@
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build directories
+bin/
+dist/
+
+# Coverage files
+coverage.out
+*.coverprofile
+
+# Logs
+logs/
+*.log
+
+# Runtime upload files
+uploads/
+
+# Dependency directories (optional)
+vendor/
+
+# Environment and local config
+.env
+.env.*
+*.local
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# docs
+docs/

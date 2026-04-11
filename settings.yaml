@@ -1,0 +1,31 @@
+db:
+  mode: mysql  # mysql sqlite redis
+  db_name: fast_gin
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: 88888888
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 1
+system:
+  mode: release # release debug
+  ip: 0.0.0.0
+  port: 8080
+  swagger:
+    enabled: false
+    title: Fast-Gin API
+    version: 1.0.0
+jwt:
+  expires: 8 # 有效期，单位小时
+  issuer: azy
+  key: dxsgjndtscriptkjfgj
+upload:
+  size: 2 # 上传大小限制 单位MB
+  dir: images
+site:
+  login:
+    captcha: true
+
