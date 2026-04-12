@@ -19,7 +19,7 @@ system:
     title: Fast-Gin API
     version: 1.0.0
 jwt:
-  expires: 8 # 有效期，单位小时
+  expires: 480 # 有效期，单位分钟
   issuer: azy
   key: dxsgjndtscriptkjfgj
 upload:

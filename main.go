@@ -2,6 +2,7 @@ package main
 
 import (
 	"fast-gin/core"
+	"fast-gin/dal/query"
 	"fast-gin/flags"
 	"fast-gin/global"
 	"fast-gin/routers"
@@ -24,6 +25,7 @@ func main() {
 	flags.Parse()
 	global.Config = core.ReadConfig()
 	global.DB = core.InitGorm()
+	query.SetDefault(global.DB)
 	global.Redis = core.InitRedis()
 	flags.Run()
 

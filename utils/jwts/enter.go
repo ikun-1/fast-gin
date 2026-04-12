@@ -10,8 +10,8 @@ import (
 )
 
 type Claims struct {
-	UserID uint `json:"userID"`
-	RoleID int8 `json:"roleID"`
+	UserID  uint `json:"userID"`
+	IsAdmin bool `json:"isAdmin"`
 }
 
 type MyClaims struct {
@@ -24,7 +24,7 @@ func SetToken(data Claims) (string, error) {
 	SetClaims := MyClaims{
 		Claims: data,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(global.Config.Jwt.Expires) * time.Hour)), //有效时间
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(global.Config.Jwt.Expires) * time.Minute)), //有效时间
 			Issuer:    global.Config.Jwt.Issuer,                                                                 //签发人
 		},
 	}
@@ -43,7 +43,7 @@ func SetToken(data Claims) (string, error) {
 // CheckToken 验证token
 func CheckToken(token string) (*MyClaims, error) {
 	//解析、验证并返回token。
-	tokenObj, err := jwt.ParseWithClaims(token, &MyClaims{}, func(token *jwt.Token) (interface{}, error) {
+	tokenObj, err := jwt.ParseWithClaims(token, &MyClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(global.Config.Jwt.Key), nil
 	})
 	if err != nil {

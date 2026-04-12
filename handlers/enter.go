@@ -1,9 +1,9 @@
-package views
+package handlers
 
 import (
-	"fast-gin/views/captcha"
-	"fast-gin/views/image"
-	"fast-gin/views/user"
+	"fast-gin/handlers/captcha"
+	"fast-gin/handlers/image"
+	"fast-gin/handlers/user"
 )
 
 type Handler struct {

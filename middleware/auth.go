@@ -38,8 +38,8 @@ func AdminMiddleware(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	if claims.RoleID != 1 {
-		res.FailWithMsg(c, "角色认证失败")
+	if !claims.IsAdmin {
+		res.FailWithMsg(c, "管理员认证失败")
 		c.Abort()
 		return
 	}

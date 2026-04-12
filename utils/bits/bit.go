@@ -2,6 +2,8 @@ package bits
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 )
 
@@ -16,9 +18,40 @@ type IntSet struct {
 	words []uint
 }
 
-func (s *IntSet) Add(x int) {
-	word := x >> bitShift
-	bit := uint(x) & bitMask
+func (s *IntSet) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 4+len(s.words)*8)
+	binary.LittleEndian.PutUint32(buf[:4], uint32(len(s.words)))
+	offset := 4
+	for _, word := range s.words {
+		binary.LittleEndian.PutUint64(buf[offset:offset+8], uint64(word))
+		offset += 8
+	}
+	return buf, nil
+}
+
+func (s *IntSet) UnmarshalBinary(data []byte) error {
+	if len(data) < 4 {
+		return errors.New("invalid intset binary data")
+	}
+	wordCount := int(binary.LittleEndian.Uint32(data[:4]))
+	expectedLen := 4 + wordCount*8
+	if len(data) != expectedLen {
+		return errors.New("invalid intset binary length")
+	}
+
+	words := make([]uint, wordCount)
+	offset := 4
+	for i := range wordCount {
+		words[i] = uint(binary.LittleEndian.Uint64(data[offset : offset+8]))
+		offset += 8
+	}
+	s.words = words
+	return nil
+}
+
+func (s *IntSet) Add(x uint) {
+	word := int(x >> bitShift)
+	bit := x & bitMask
 	for word >= len(s.words) {
 		s.words = append(s.words, 0)
 	}
@@ -35,9 +68,9 @@ func (s *IntSet) UnionWith(o *IntSet) {
 	}
 }
 
-func (s *IntSet) Has(x int) bool {
-	word := x >> bitShift
-	bit := uint(x) & bitMask
+func (s *IntSet) Has(x uint) bool {
+	word := int(x >> bitShift)
+	bit := x & bitMask
 	return word < len(s.words) && s.words[word]&(1<<bit) != 0
 }
 
@@ -56,7 +89,7 @@ func (s *IntSet) String() string {
 				if buf.Len() > len("{") {
 					buf.WriteByte(' ')
 				}
-				buf.WriteString(fmt.Sprintf("%d", bitsPerWord*i+j))
+				fmt.Fprintf(&buf, "%d", bitsPerWord*i+j)
 			}
 		}
 	}
@@ -75,9 +108,9 @@ func (s *IntSet) Len() int {
 	return count
 }
 
-func (s *IntSet) Remove(x int) {
-	word := x >> bitShift
-	bit := uint(x) & bitMask
+func (s *IntSet) Remove(x uint) {
+	word := int(x >> bitShift)
+	bit := x & bitMask
 	if word < len(s.words) {
 		s.words[word] &^= 1 << bit
 	}
@@ -94,7 +127,7 @@ func (s *IntSet) Copy() *IntSet {
 	return t
 }
 
-func (s *IntSet) AddAll(xs ...int) {
+func (s *IntSet) AddAll(xs ...uint) {
 	for _, x := range xs {
 		s.Add(x)
 	}

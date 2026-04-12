@@ -1,6 +1,8 @@
 package image
 
 import (
+	"errors"
+	"fast-gin/dal/query"
 	"fast-gin/global"
 	"fast-gin/middleware"
 	"fast-gin/models"
@@ -16,6 +18,7 @@ import (
 	"fast-gin/utils/random"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 var whiteList = []string{
@@ -84,9 +87,8 @@ func (Image) UploadView(c *gin.Context) {
 		if uploadFileHash == oldFileHash {
 			// 上传的图片，名称和内容都是一样的，检查数据库中是否已有记录
 			fileHash = uploadFileHash
-			var imageModel models.ImageModel
-			result := global.DB.Where("file_hash = ?", fileHash).First(&imageModel)
-			if result.RowsAffected > 0 {
+			imageModel, dbErr := query.Image.WithContext(c).Where(query.Image.FileHash.Eq(fileHash)).Take()
+			if dbErr == nil {
 				// 数据库中已有记录，直接返回
 				res.Ok(c, gin.H{
 					"id":      imageModel.ID,
@@ -94,14 +96,21 @@ func (Image) UploadView(c *gin.Context) {
 				}, "上传成功")
 				return
 			}
+			if !errors.Is(dbErr, gorm.ErrRecordNotFound) {
+				res.FailWithMsg(c, "查询图片记录失败")
+				return
+			}
 			// 数据库中没有记录，创建新记录
-			imageModel = models.ImageModel{
+			imageModel = &models.Image{
 				Address:  "/" + fp,
 				FileName: fileHeader.Filename,
 				FileHash: fileHash,
 				UserID:   claims.UserID,
 			}
-			global.DB.Create(&imageModel)
+			if dbErr = query.Image.WithContext(c).Create(imageModel); dbErr != nil {
+				res.FailWithMsg(c, "图片信息保存失败")
+				return
+			}
 			res.Ok(c, gin.H{
 				"id":      imageModel.ID,
 				"address": imageModel.Address,
@@ -120,13 +129,16 @@ func (Image) UploadView(c *gin.Context) {
 	fileHash = md5.MD5WithFile(uploadFile)
 
 	// 保存图片信息到数据库
-	imageModel := models.ImageModel{
+	imageModel := &models.Image{
 		Address:  "/" + fp,
 		FileName: fileHeader.Filename,
 		FileHash: fileHash,
 		UserID:   claims.UserID,
 	}
-	global.DB.Create(&imageModel)
+	if err = query.Image.WithContext(c).Create(imageModel); err != nil {
+		res.FailWithMsg(c, "图片信息保存失败")
+		return
+	}
 
 	res.Ok(c, gin.H{
 		"id":      imageModel.ID,

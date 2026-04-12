@@ -2,9 +2,11 @@ package core
 
 import (
 	"fast-gin/global"
-	"gorm.io/gorm"
 	"time"
+
 	"go.uber.org/zap"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func InitGorm() (db *gorm.DB) {
@@ -15,6 +17,9 @@ func InitGorm() (db *gorm.DB) {
 	}
 	db, err := gorm.Open(dialector, &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true, // 不生成实体外键
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true, // use singular table name, table for `User` would be `user` with this option enabled
+		},
 	})
 	if err != nil {
 		zap.S().Fatalf("数据库连接失败 %v", err)

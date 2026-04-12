@@ -1,13 +1,15 @@
 package user
 
 import (
+	"fast-gin/dal/query"
 	"fast-gin/global"
+	"fast-gin/handlers/captcha"
 	"fast-gin/middleware"
-	"fast-gin/models"
+	"fast-gin/permissions"
+	"fast-gin/service/permission_serv"
 	"fast-gin/utils/jwts"
 	"fast-gin/utils/pwd"
 	"fast-gin/utils/res"
-	"fast-gin/views/captcha"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -45,8 +47,10 @@ func (User) LoginView(c *gin.Context) {
 		}
 	}
 
-	var user models.UserModel
-	err := global.DB.Take(&user, "username = ?", cr.Username).Error
+	user, err := query.User.WithContext(c).
+		Where(query.User.Username.Eq(cr.Username)).
+		Take()
+
 	if err != nil {
 		res.FailWithMsg(c, "用户名或密码错误")
 		return
@@ -57,15 +61,28 @@ func (User) LoginView(c *gin.Context) {
 		return
 	}
 
+	var adminRoleCount int64
+	adminRoleCount, err = query.UserRole.WithContext(c).
+		Join(query.Role, query.UserRole.RoleID.EqCol(query.Role.ID)).
+		Where(
+			query.UserRole.UserID.Eq(user.ID),
+			query.Role.Code.Eq(permissions.RoleCode[permissions.RoleAdmin]),
+		).
+		Count()
+	if err != nil {
+		zap.S().Warnf("查询用户管理员角色失败 userID=%d err=%v", user.ID, err)
+	}
+
 	token, err := jwts.SetToken(jwts.Claims{
-		UserID: user.ID,
-		RoleID: user.RoleID,
+		UserID:  user.ID,
+		IsAdmin: adminRoleCount > 0,
 	})
 	if err != nil {
-		zap.S().Errorf("生成token失败 %s", err)
 		res.FailWithMsg(c, "登录失败")
 		return
 	}
+
+	permission_serv.WarmUserPerms(user.ID)
 
 	res.OkWithData(c, token)
 }

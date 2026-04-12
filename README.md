@@ -31,7 +31,8 @@ go run main.go
 ## 目录说明
 
 ```text
-views            路由对应的处理器函数
+cmd/gen          生成query查询
+handlers         路由对应的处理器函数
 config           配置的struct目录
 core             初始化操作
 flags            命令行参数
@@ -39,7 +40,7 @@ global           全局变量
 middleware       gin的中间件
 models           表结构
 routers          路由
-service          服务
+service          服务(redis,定时器cron)
 utils            工具目录
 main.go          入口文件
 settings.yaml    配置文件
