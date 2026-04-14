@@ -1,10 +1,5 @@
 package permissions
 
-const (
-	ImageUpload PermissionBit = iota
-	ImageDelete
-)
-
 var ImagePermCode = map[PermissionBit]string{
 	ImageUpload: "image:upload",
 	ImageDelete: "image:delete",

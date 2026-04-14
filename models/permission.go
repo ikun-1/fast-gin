@@ -12,3 +12,7 @@ type Permission struct {
 	Icon      string `gorm:"size:50;comment:图标" json:"icon"`
 	SortOrder int    `gorm:"default:0;comment:排序" json:"sortOrder"`
 }
+
+func init() {
+	MigrateModels = append(MigrateModels, &Permission{})
+}

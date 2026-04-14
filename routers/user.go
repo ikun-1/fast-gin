@@ -11,16 +11,34 @@ import (
 
 func UserRouter(g *gin.RouterGroup) {
 	User := handlers.Handlers.User
-	g.POST("user/login",
+	g.POST("auth/login",
 		middleware.LimitMiddleware(2),
-		middleware.ShouldBind[user.LoginRequest],
+		middleware.ShouldBindJSON[user.LoginRequest],
 		User.LoginView)
-	g.POST("user/list",
-		middleware.LimitMiddleware(10),
-		middleware.AuthMiddleware,
-		middleware.ShouldBind[models.PageInfo],
-		User.UserListView)
-	g.POST("user/logout",
+	g.POST("auth/logout",
 		middleware.AuthMiddleware,
 		User.LogoutView)
+
+	g.GET("users",
+		middleware.LimitMiddleware(10),
+		middleware.AuthMiddleware,
+		middleware.ShouldBindQuery[models.PageInfo],
+		User.UserListView)
+	g.GET("users/:id",
+		middleware.AuthMiddleware,
+		middleware.ShouldBindUri[models.UpdateUri],
+		User.GetUserView)
+	g.POST("users",
+		middleware.AdminMiddleware,
+		middleware.ShouldBindJSON[user.CreateUserRequest],
+		User.CreateUserView)
+	g.PUT("users/:id",
+		middleware.ShouldBindUri[models.UpdateUri],
+		middleware.SelfOrAdminMiddleware,
+		middleware.ShouldBindJSON[user.UpdateUserRequest],
+		User.UpdateUserView)
+	g.DELETE("users/:id",
+		middleware.AdminMiddleware,
+		middleware.ShouldBindUri[models.UpdateUri],
+		User.DeleteUserView)
 }

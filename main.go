@@ -7,6 +7,7 @@ import (
 	"fast-gin/global"
 	"fast-gin/routers"
 	"fast-gin/service/cron_serv"
+	"fast-gin/service/permission_serv"
 	"fast-gin/utils/validate"
 )
 
@@ -30,6 +31,7 @@ func main() {
 	flags.Run()
 
 	validate.InitValidator()
+	permission_serv.InitRolePermCache()
 	cron_serv.InitCron()
 
 	routers.Run()

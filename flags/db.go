@@ -8,14 +8,7 @@ import (
 )
 
 func MigrateDB() {
-	err := global.DB.AutoMigrate(
-		&models.User{},
-		&models.Role{},
-		&models.Permission{},
-		&models.UserRole{},
-		&models.RolePermission{},
-		&models.Image{},
-	)
+	err := global.DB.AutoMigrate(models.MigrateModels...)
 	if err != nil {
 		zap.S().Errorf("表结构迁移失败 %s", err)
 		return

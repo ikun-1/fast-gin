@@ -27,6 +27,7 @@ func Run() {
 	UserRouter(g)
 	CaptchaRouter(g)
 	ImageRouter(g)
+	RBACRouter(g)
 
 	addr := global.Config.System.Addr()
 	if global.Config.System.Mode == "release" {

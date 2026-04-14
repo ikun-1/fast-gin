@@ -4,16 +4,35 @@ import (
 	"fast-gin/global"
 	"fast-gin/models"
 	"fmt"
+	"regexp"
+	"strings"
+
 	"gorm.io/gorm"
 )
 
+var sortFieldRegexp = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
 // QueryOption 查询选项，包含分页、模糊查询、自定义条件、预加载、调试等
 type QueryOption struct {
-	models.PageInfo          // 包含 Page(int), Limit(int), Key(string), Order(string)
+	models.PageInfo          // 包含分页、搜索、排序参数
 	Likes           []string // 模糊查询的字段列表
 	Where           *gorm.DB // 自定义 Where 条件（可选）
 	Preloads        []string // 预加载的关联字段
 	Debug           bool     // 是否开启调试模式
+}
+
+func buildSafeOrder(option QueryOption) string {
+	dir := strings.ToLower(option.SortDir)
+	if dir != "asc" && dir != "desc" {
+		dir = "desc"
+	}
+
+	field := strings.TrimSpace(option.SortBy)
+	if field == "" || !sortFieldRegexp.MatchString(field) {
+		field = "created_at"
+	}
+
+	return fmt.Sprintf("%s %s", field, strings.ToUpper(dir))
 }
 
 // QueryList 通用列表查询函数
@@ -77,11 +96,8 @@ func QueryList[T any](model T, option QueryOption) (list []T, count int64, err e
 	}
 	offset := (option.Page - 1) * option.Limit
 
-	// 9. 排序（默认按创建时间降序）
-	if option.Order == "" {
-		option.Order = "created_at desc"
-	}
-	query = query.Order(option.Order)
+	// 9. 排序（单字段字符串）
+	query = query.Order(buildSafeOrder(option))
 
 	// 10. 执行分页查询
 	if option.Limit != -1 {

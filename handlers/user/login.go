@@ -16,11 +16,11 @@ import (
 )
 
 type LoginRequest struct {
-	Username    string `json:"username" form:"username" binding:"required" display:"用户名"`
-	Password    string `json:"password" form:"password" binding:"required" display:"密码"`
-	RePassword  string `json:"rePassword" form:"rePassword" binding:"eqfield=Password,required" display:"确认密码"`
-	CaptchaID   string `json:"captchaID"`
-	CaptchaCode string `json:"captchaCode"`
+	Username    string `json:"username" form:"username" binding:"required" display:"用户名" example:"admin"`
+	Password    string `json:"password" form:"password" binding:"required" display:"密码" example:"123456"`
+	RePassword  string `json:"rePassword" form:"rePassword" binding:"eqfield=Password,required" display:"确认密码" example:"123456"`
+	CaptchaID   string `json:"captchaID" example:"captcha-id-123"`
+	CaptchaCode string `json:"captchaCode" example:"1234"`
 }
 
 // LoginView 用户登录
@@ -32,9 +32,9 @@ type LoginRequest struct {
 // @Param        user  body  LoginRequest  true  "登录参数"
 // @Success      200  {object}  res.Response  "{"code":0,"msg":"success","data":"token_string"}"
 // @Failure      200  {object}  res.Response       "{"code":1,"msg":"invalid parameters","data":{"rePassword":"确认密码必须等于密码"}}"
-// @Router       /user/login [post]
+// @Router       /auth/login [post]
 func (User) LoginView(c *gin.Context) {
-	cr := middleware.GetBind[LoginRequest](c)
+	cr := middleware.GetJSON[LoginRequest](c)
 
 	if global.Config.Site.Login.Captcha {
 		if cr.CaptchaID == "" || cr.CaptchaCode == "" {

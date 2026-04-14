@@ -7,6 +7,7 @@ package query
 import (
 	"context"
 	"database/sql"
+	"fast-gin/models"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -16,8 +17,6 @@ import (
 	"gorm.io/gen/field"
 
 	"gorm.io/plugin/dbresolver"
-
-	"fast-gin/models"
 )
 
 func newUserRole(db *gorm.DB, opts ...gen.DOOption) userRole {

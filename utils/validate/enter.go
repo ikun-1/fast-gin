@@ -16,7 +16,7 @@ import (
 )
 
 type validateRule func(fl validator.FieldLevel) bool
-type ValidateConfig struct {
+type validateConfig struct {
 	Tag         string
 	Validate    validateRule
 	Translation string
@@ -24,7 +24,7 @@ type ValidateConfig struct {
 }
 
 var (
-	validations = make(map[string]ValidateConfig)
+	validations = make([]validateConfig, 0)
 	validate    *validator.Validate
 	translator  ut.Translator
 	once        sync.Once
@@ -48,8 +48,8 @@ func InitValidator() {
 		}
 
 		// 4. 注册自定义验证规则
-		for _, st := range validations {
-			st.registerValidation()
+		for _, validation := range validations {
+			validation.registerValidation()
 		}
 
 		zap.L().Info("验证器和翻译器初始化成功")
@@ -176,7 +176,7 @@ func getFieldTypeByName(model any, name string) (reflect.StructField, bool) {
 }
 
 // RegisterValidation 注册自定义验证规则
-func (vc *ValidateConfig) registerValidation() {
+func (vc *validateConfig) registerValidation() {
 	validate.RegisterValidation(vc.Tag, func(fl validator.FieldLevel) bool {
 		return vc.Validate(fl)
 	})
@@ -190,16 +190,4 @@ func (vc *ValidateConfig) registerValidation() {
 			return t
 		},
 	)
-}
-
-func ValidateError(err error) string {
-	errs, ok := err.(validator.ValidationErrors)
-	if !ok {
-		return err.Error()
-	}
-	var list []string
-	for _, e := range errs {
-		list = append(list, e.Translate(translator))
-	}
-	return strings.Join(list, ";")
 }

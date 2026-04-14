@@ -6,12 +6,22 @@ type PermissionBit = uint
 var PermCode = map[PermissionBit]string{}
 var PermBit = map[string]PermissionBit{}
 
-var index PermissionBit = 0
-
 func registerPerm(permCode map[PermissionBit]string) {
-	for _, code := range permCode {
-		PermCode[index] = code
-		PermBit[code] = index
-		index++
+	for bit, code := range permCode {
+		PermCode[bit] = code
+		PermBit[code] = bit
 	}
 }
+
+const (
+	// 用户权限
+	UserCreate PermissionBit = iota
+	UserUpdate
+	UserDelete
+
+	// 图片权限
+	ImageUpload
+	ImageDelete
+
+	
+)

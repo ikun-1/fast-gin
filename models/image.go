@@ -7,3 +7,7 @@ type Image struct {
 	FileHash string `gorm:"size:64;comment:文件MD5哈希" json:"fileHash"` // 文件MD5哈希
 	UserID   uint   `gorm:"comment:上传用户ID" json:"userID"`            // 上传用户ID
 }
+
+func init() {
+	MigrateModels = append(MigrateModels, &Image{})
+}

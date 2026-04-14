@@ -7,6 +7,7 @@ package query
 import (
 	"context"
 	"database/sql"
+	"fast-gin/models"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -16,8 +17,6 @@ import (
 	"gorm.io/gen/field"
 
 	"gorm.io/plugin/dbresolver"
-
-	"fast-gin/models"
 )
 
 func newRole(db *gorm.DB, opts ...gen.DOOption) role {
@@ -36,6 +35,7 @@ func newRole(db *gorm.DB, opts ...gen.DOOption) role {
 	_role.Code = field.NewString(tableName, "code")
 	_role.Description = field.NewString(tableName, "description")
 	_role.Status = field.NewInt8(tableName, "status")
+	_role.PID = field.NewUint(tableName, "p_id")
 
 	_role.fillFieldMap()
 
@@ -54,6 +54,7 @@ type role struct {
 	Code        field.String // 角色编码
 	Description field.String // 角色描述
 	Status      field.Int8   // 状态 1启用 0禁用
+	PID         field.Uint   // 父角色ID 实现单继承
 
 	fieldMap map[string]field.Expr
 }
@@ -78,6 +79,7 @@ func (r *role) updateTableName(table string) *role {
 	r.Code = field.NewString(table, "code")
 	r.Description = field.NewString(table, "description")
 	r.Status = field.NewInt8(table, "status")
+	r.PID = field.NewUint(table, "p_id")
 
 	r.fillFieldMap()
 
@@ -102,7 +104,7 @@ func (r *role) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (r *role) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 8)
+	r.fieldMap = make(map[string]field.Expr, 9)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["created_at"] = r.CreatedAt
 	r.fieldMap["updated_at"] = r.UpdatedAt
@@ -111,6 +113,7 @@ func (r *role) fillFieldMap() {
 	r.fieldMap["code"] = r.Code
 	r.fieldMap["description"] = r.Description
 	r.fieldMap["status"] = r.Status
+	r.fieldMap["p_id"] = r.PID
 }
 
 func (r role) clone(db *gorm.DB) role {

@@ -5,18 +5,19 @@ import (
 )
 
 func init() {
-	validations["notAdmin"] = ValidateConfig{
-		Tag:         "notAdmin",
-		Validate:    notAdmin,
-		Translation: "{0}不能为admin",
-		Override:    false,
-	}
-	validations["strongPwd"] = ValidateConfig{
-		Tag:         "strongPwd",
-		Validate:    strongPwd,
-		Translation: "{0}必须包含大写字母、小写字母、数字和特殊字符(!@#$%^&*)",
-		Override:    false,
-	}
+	validations = append(validations,
+		validateConfig{
+			Tag:         "notAdmin",
+			Validate:    notAdmin,
+			Translation: "{0}不能为admin",
+			Override:    false,
+		},
+		validateConfig{
+			Tag:         "strongPwd",
+			Validate:    strongPwd,
+			Translation: "{0}必须包含大写字母、小写字母、数字和特殊字符(!@#$%^&*)",
+			Override:    false,
+		})
 }
 
 func strongPwd(fl validator.FieldLevel) bool {

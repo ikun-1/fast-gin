@@ -1,11 +1,5 @@
 package permissions
 
-const (
-	UserCreate PermissionBit = iota
-	UserUpdate
-	UserDelete
-)
-
 var UserPermCode = map[PermissionBit]string{
 	UserCreate: "user:create",
 	UserUpdate: "user:update",

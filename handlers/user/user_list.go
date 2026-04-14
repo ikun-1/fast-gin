@@ -16,12 +16,12 @@ import (
 // @Accept       json
 // @Produce      json
 // @Security     Bearer
-// @Param        pageInfo  body  models.PageInfo  true  "分页参数和搜索条件"
+// @Param        pageInfo query     models.PageInfo  false  "分页信息，包含page和pageSize字段"
 // @Success      200  {object}  res.Response  "{"code":0,"msg":"success","data":{"list":[...],"count":0}}"
 // @Failure      200  {object}  res.Response       "{"code":3,"msg":"认证失败"}"
-// @Router       /user/list [post]
+// @Router       /users [get]
 func (User) UserListView(c *gin.Context) {
-	var cr = middleware.GetBind[models.PageInfo](c)
+	var cr = middleware.GetQuery[models.PageInfo](c)
 
 	list, count, _ := common.QueryList(models.User{}, common.QueryOption{
 		PageInfo: cr,

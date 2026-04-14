@@ -13,8 +13,16 @@ type Model struct {
 }
 
 type PageInfo struct {
-	Page  int    `form:"page"`
-	Limit int    `form:"limit"`
-	Key   string `form:"key"`
-	Order string `form:"order"`
+	Page    int    `form:"page" json:"page" default:"1" example:"1"`
+	Limit   int    `form:"limit" json:"limit" default:"10" example:"10"`
+	Key     string `form:"key" json:"key" example:""`
+	SortBy  string `form:"sortBy" json:"sortBy" default:"created_at" example:"created_at"`
+	SortDir string `form:"sortDir" json:"sortDir" example:"desc" default:"desc"`
+}
+
+// MigrateModels stores all models that need schema migration.
+var MigrateModels = make([]any, 0)
+
+type UpdateUri struct {
+	ID uint `uri:"id" binding:"required"`
 }

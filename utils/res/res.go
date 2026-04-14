@@ -20,16 +20,18 @@ const (
 	PermissionErr
 	ParamErr
 	DatabaseErr
+	NotLoginErr
 )
 
 var CodeMsgMap = map[int]string{
-	Success:       "success",
-	InternalErr:   "internal server error",
-	NotFoundErr:   "resource not found",
-	AuthErr:       "authentication failed",
-	PermissionErr: "permission denied",
-	ParamErr:      "invalid parameters",
-	DatabaseErr:   "database error",
+	Success:       "成功",
+	InternalErr:   "内部服务器错误",
+	NotFoundErr:   "资源未找到",
+	AuthErr:       "身份验证失败",
+	PermissionErr: "权限不足",
+	ParamErr:      "参数无效",
+	DatabaseErr:   "数据库错误",
+	NotLoginErr:   "用户未登录",
 }
 
 func response(c *gin.Context, code int, msg string, data any) {
@@ -96,4 +98,8 @@ func FailPermission(c *gin.Context) {
 
 func FailParam(c *gin.Context, data any) {
 	response(c, ParamErr, CodeMsgMap[ParamErr], data)
+}
+
+func FailNotLogin(c *gin.Context) {
+	FailWithCode(c, NotLoginErr)
 }

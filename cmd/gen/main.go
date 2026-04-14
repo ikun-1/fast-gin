@@ -39,14 +39,7 @@ func main() {
 	})
 	g.UseDB(db)
 
-	g.ApplyBasic(
-		models.User{},
-		models.Role{},
-		models.Permission{},
-		models.UserRole{},
-		models.RolePermission{},
-		models.Image{},
-	)
+	g.ApplyBasic(models.MigrateModels...)
 	g.Execute()
 
 	fmt.Printf("gorm gen finished, output: %s\n", *outPath)

@@ -17,7 +17,7 @@ import (
 // @Security     Bearer
 // @Success      200  {object}  res.Response  "{"code":0,"msg":"注销成功"}"
 // @Failure      200  {object}  res.Response  "{"code":3,"msg":"认证失败"}"
-// @Router       /user/logout [post]
+// @Router       /auth/logout [post]
 func (User) LogoutView(c *gin.Context) {
 	token := c.GetHeader("token")
 	if global.Redis == nil {

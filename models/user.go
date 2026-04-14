@@ -10,3 +10,7 @@ type User struct {
 	Phone    string `gorm:"size:20;comment:手机号" json:"phone"`
 	Status   int8   `gorm:"default:1;comment:状态 1启用 0禁用" json:"status"`
 }
+
+func init() {
+	MigrateModels = append(MigrateModels, &User{})
+}

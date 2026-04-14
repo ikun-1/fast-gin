@@ -39,7 +39,7 @@ var whiteList = []string{
 // @Success      200   {object}  res.Response  "{"code":0,"msg":"上传成功","data":{"id":1,"address":"/uploads/images/xxx.jpg"}}"
 // @Failure      200   {object}  res.Response       "{"code":1,"msg":"请选择文件"}"
 // @Failure      200   {object}  res.Response       "{"code":3,"msg":"用户认证失败"}"
-// @Router       /images/upload [post]
+// @Router       /images [post]
 func (Image) UploadView(c *gin.Context) {
 	// 获取当前用户ID
 	claims := middleware.GetAuth(c)

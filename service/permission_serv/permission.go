@@ -7,43 +7,71 @@ import (
 	"fast-gin/permissions"
 	"fast-gin/service/redis_serv"
 	bitset "fast-gin/utils/bits"
+	"fmt"
+	"sort"
+	"strings"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-// LoadUserPerms loads a user's permission bitset from role-permission relations.
+func formatPermSet(set *bitset.IntSet) string {
+	if set == nil {
+		return "[]"
+	}
+
+	bits := set.Elems()
+	labels := make([]string, 0, len(bits))
+	for _, bit := range bits {
+		if code, ok := permissions.PermCode[permissions.PermissionBit(bit)]; ok {
+			labels = append(labels, code)
+			continue
+		}
+		labels = append(labels, fmt.Sprintf("bit:%d", bit))
+	}
+
+	sort.Strings(labels)
+	return "[" + strings.Join(labels, " ") + "]"
+}
+
+// LoadUserPerms 加载用户权限：先查Redis用户缓存，未命中则从角色展开权限合并
+// 流程：查询用户角色 → 从Redis获取各角色展开权限 → 合并得到用户权限 → 缓存用户权限
 func LoadUserPerms(db *gorm.DB, userID uint) (*bitset.IntSet, error) {
+	// 1. 优先查询用户权限缓存
 	if set, ok, err := redis_serv.GetUserPermIntSet(userID); err == nil && ok {
 		return set, nil
 	}
 
-	var codes []string
+	// 2. 获取用户拥有的所有角色ID
+	var roleIDs []uint
 	err := query.UserRole.WithContext(context.Background()).
-		Distinct(query.Permission.Code).
-		Join(query.RolePermission, query.UserRole.RoleID.EqCol(query.RolePermission.RoleID)).
-		Join(query.Permission, query.Permission.ID.EqCol(query.RolePermission.PermID)).
 		Where(query.UserRole.UserID.Eq(userID)).
-		Pluck(query.Permission.Code, &codes)
+		Pluck(query.UserRole.RoleID, &roleIDs)
 	if err != nil {
 		return nil, err
 	}
+	// 打印调试日志，显示用户拥有的角色ID列表
+	zap.S().Debugf("加载用户角色 userID=%d roleIDs=%v", userID, roleIDs)
 
-	s := &bitset.IntSet{}
-	for _, code := range codes {
-		if bit, ok := permissions.PermBit[code]; ok {
-			s.Add(bit)
+	// 3. 合并所有角色的展开权限
+	mergedSet := &bitset.IntSet{}
+	for _, roleID := range roleIDs {
+		rolePerms, err := GetRoleExpandedPerms(roleID)
+		if err != nil {
+			zap.S().Warnf("获取角色权限失败 userID=%d roleID=%d err=%v", userID, roleID, err)
+			continue
 		}
+		mergedSet.UnionWith(rolePerms)
 	}
 
-	// 打印用户权限码列表，方便调试
-	zap.S().Debugf("加载用户权限 userID=%d perms=%v", userID, codes)
-
-	// 将结果缓存到Redis，过期时间与JWT一致
-	if err := redis_serv.SetUserPermIntSet(userID, s); err != nil {
-		zap.S().Warnf("缓存用户权限IntSet失败 userID=%d err=%v", userID, err)
+	// 4. 缓存用户权限（与JWT过期时间一致，通常为1小时）
+	if err := redis_serv.SetUserPermIntSet(userID, mergedSet); err != nil {
+		zap.S().Warnf("缓存用户权限失败 userID=%d err=%v", userID, err)
 	}
-	return s, nil
+
+	zap.S().Debugf("加载用户权限 userID=%d perms=%s", userID, formatPermSet(mergedSet))
+
+	return mergedSet, nil
 }
 
 func HasPermissionBit(db *gorm.DB, userID uint, bit permissions.PermissionBit) (bool, error) {
@@ -51,7 +79,13 @@ func HasPermissionBit(db *gorm.DB, userID uint, bit permissions.PermissionBit) (
 	if err != nil {
 		return false, err
 	}
-	return set.Has(bit), nil
+	permCode, ok := permissions.PermCode[bit]
+	if !ok {
+		permCode = "unknown"
+	}
+	result := set.Has(bit)
+	zap.S().Debugf("检查用户权限 userID=%d checkPerm=%s(%d) userPerms=%s result=%t", userID, permCode, bit, formatPermSet(set), result)
+	return result, nil
 }
 
 func WarmUserPerms(userID uint) {
