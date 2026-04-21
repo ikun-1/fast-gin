@@ -16,59 +16,99 @@ import (
 )
 
 var (
-	Q              = new(Query)
-	Image          *image
-	Permission     *permission
-	Role           *role
-	RolePermission *rolePermission
-	User           *user
-	UserRole       *userRole
+	Q                 = new(Query)
+	Image             *image
+	MeetingActionLog  *meetingActionLog
+	MeetingAttachment *meetingAttachment
+	MeetingInvitation *meetingInvitation
+	MeetingRoom       *meetingRoom
+	MeetingRoomMember *meetingRoomMember
+	Permission        *permission
+	Recording         *recording
+	Role              *role
+	RolePermission    *rolePermission
+	SignalMessage     *signalMessage
+	User              *user
+	UserRole          *userRole
+	Whiteboard        *whiteboard
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
 	Image = &Q.Image
+	MeetingActionLog = &Q.MeetingActionLog
+	MeetingAttachment = &Q.MeetingAttachment
+	MeetingInvitation = &Q.MeetingInvitation
+	MeetingRoom = &Q.MeetingRoom
+	MeetingRoomMember = &Q.MeetingRoomMember
 	Permission = &Q.Permission
+	Recording = &Q.Recording
 	Role = &Q.Role
 	RolePermission = &Q.RolePermission
+	SignalMessage = &Q.SignalMessage
 	User = &Q.User
 	UserRole = &Q.UserRole
+	Whiteboard = &Q.Whiteboard
 }
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:             db,
-		Image:          newImage(db, opts...),
-		Permission:     newPermission(db, opts...),
-		Role:           newRole(db, opts...),
-		RolePermission: newRolePermission(db, opts...),
-		User:           newUser(db, opts...),
-		UserRole:       newUserRole(db, opts...),
+		db:                db,
+		Image:             newImage(db, opts...),
+		MeetingActionLog:  newMeetingActionLog(db, opts...),
+		MeetingAttachment: newMeetingAttachment(db, opts...),
+		MeetingInvitation: newMeetingInvitation(db, opts...),
+		MeetingRoom:       newMeetingRoom(db, opts...),
+		MeetingRoomMember: newMeetingRoomMember(db, opts...),
+		Permission:        newPermission(db, opts...),
+		Recording:         newRecording(db, opts...),
+		Role:              newRole(db, opts...),
+		RolePermission:    newRolePermission(db, opts...),
+		SignalMessage:     newSignalMessage(db, opts...),
+		User:              newUser(db, opts...),
+		UserRole:          newUserRole(db, opts...),
+		Whiteboard:        newWhiteboard(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	Image          image
-	Permission     permission
-	Role           role
-	RolePermission rolePermission
-	User           user
-	UserRole       userRole
+	Image             image
+	MeetingActionLog  meetingActionLog
+	MeetingAttachment meetingAttachment
+	MeetingInvitation meetingInvitation
+	MeetingRoom       meetingRoom
+	MeetingRoomMember meetingRoomMember
+	Permission        permission
+	Recording         recording
+	Role              role
+	RolePermission    rolePermission
+	SignalMessage     signalMessage
+	User              user
+	UserRole          userRole
+	Whiteboard        whiteboard
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:             db,
-		Image:          q.Image.clone(db),
-		Permission:     q.Permission.clone(db),
-		Role:           q.Role.clone(db),
-		RolePermission: q.RolePermission.clone(db),
-		User:           q.User.clone(db),
-		UserRole:       q.UserRole.clone(db),
+		db:                db,
+		Image:             q.Image.clone(db),
+		MeetingActionLog:  q.MeetingActionLog.clone(db),
+		MeetingAttachment: q.MeetingAttachment.clone(db),
+		MeetingInvitation: q.MeetingInvitation.clone(db),
+		MeetingRoom:       q.MeetingRoom.clone(db),
+		MeetingRoomMember: q.MeetingRoomMember.clone(db),
+		Permission:        q.Permission.clone(db),
+		Recording:         q.Recording.clone(db),
+		Role:              q.Role.clone(db),
+		RolePermission:    q.RolePermission.clone(db),
+		SignalMessage:     q.SignalMessage.clone(db),
+		User:              q.User.clone(db),
+		UserRole:          q.UserRole.clone(db),
+		Whiteboard:        q.Whiteboard.clone(db),
 	}
 }
 
@@ -82,33 +122,57 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:             db,
-		Image:          q.Image.replaceDB(db),
-		Permission:     q.Permission.replaceDB(db),
-		Role:           q.Role.replaceDB(db),
-		RolePermission: q.RolePermission.replaceDB(db),
-		User:           q.User.replaceDB(db),
-		UserRole:       q.UserRole.replaceDB(db),
+		db:                db,
+		Image:             q.Image.replaceDB(db),
+		MeetingActionLog:  q.MeetingActionLog.replaceDB(db),
+		MeetingAttachment: q.MeetingAttachment.replaceDB(db),
+		MeetingInvitation: q.MeetingInvitation.replaceDB(db),
+		MeetingRoom:       q.MeetingRoom.replaceDB(db),
+		MeetingRoomMember: q.MeetingRoomMember.replaceDB(db),
+		Permission:        q.Permission.replaceDB(db),
+		Recording:         q.Recording.replaceDB(db),
+		Role:              q.Role.replaceDB(db),
+		RolePermission:    q.RolePermission.replaceDB(db),
+		SignalMessage:     q.SignalMessage.replaceDB(db),
+		User:              q.User.replaceDB(db),
+		UserRole:          q.UserRole.replaceDB(db),
+		Whiteboard:        q.Whiteboard.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	Image          IImageDo
-	Permission     IPermissionDo
-	Role           IRoleDo
-	RolePermission IRolePermissionDo
-	User           IUserDo
-	UserRole       IUserRoleDo
+	Image             IImageDo
+	MeetingActionLog  IMeetingActionLogDo
+	MeetingAttachment IMeetingAttachmentDo
+	MeetingInvitation IMeetingInvitationDo
+	MeetingRoom       IMeetingRoomDo
+	MeetingRoomMember IMeetingRoomMemberDo
+	Permission        IPermissionDo
+	Recording         IRecordingDo
+	Role              IRoleDo
+	RolePermission    IRolePermissionDo
+	SignalMessage     ISignalMessageDo
+	User              IUserDo
+	UserRole          IUserRoleDo
+	Whiteboard        IWhiteboardDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		Image:          q.Image.WithContext(ctx),
-		Permission:     q.Permission.WithContext(ctx),
-		Role:           q.Role.WithContext(ctx),
-		RolePermission: q.RolePermission.WithContext(ctx),
-		User:           q.User.WithContext(ctx),
-		UserRole:       q.UserRole.WithContext(ctx),
+		Image:             q.Image.WithContext(ctx),
+		MeetingActionLog:  q.MeetingActionLog.WithContext(ctx),
+		MeetingAttachment: q.MeetingAttachment.WithContext(ctx),
+		MeetingInvitation: q.MeetingInvitation.WithContext(ctx),
+		MeetingRoom:       q.MeetingRoom.WithContext(ctx),
+		MeetingRoomMember: q.MeetingRoomMember.WithContext(ctx),
+		Permission:        q.Permission.WithContext(ctx),
+		Recording:         q.Recording.WithContext(ctx),
+		Role:              q.Role.WithContext(ctx),
+		RolePermission:    q.RolePermission.WithContext(ctx),
+		SignalMessage:     q.SignalMessage.WithContext(ctx),
+		User:              q.User.WithContext(ctx),
+		UserRole:          q.UserRole.WithContext(ctx),
+		Whiteboard:        q.Whiteboard.WithContext(ctx),
 	}
 }
 

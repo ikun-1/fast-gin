@@ -1,0 +1,43 @@
+---
+description: Go coding standards for backend code
+globs: **/*.go
+alwaysApply: false
+---
+
+# Go Coding Standards
+
+- Prefer small, focused functions and handlers.
+- Keep error handling explicit; return wrapped errors with context when useful.
+- Use meaningful names for packages, types, and variables.
+- Avoid unnecessary abstraction; keep the implementation straightforward.
+- Keep HTTP handlers thin and move business logic into service packages.
+- Validate input at the boundary and fail fast on invalid requests.
+- Use middleware-based parameter binding in routes and handlers instead of calling `c.Param`, `c.Query`, or `c.ShouldBind*` directly.
+- Access bound values with `middleware.GetUri[...]`, `middleware.GetQuery[...]`, `middleware.GetJSON[...]`, and related helpers.
+- Prefer `uint` for ID fields and URI/query parameters that represent IDs; avoid using `string` for IDs unless the value is truly non-numeric.
+- When adding a new model that needs database access, first use the generated methods in `dal/query` (from `cmd/gen/main`) for that model; if the query code does not exist yet, run the generator before implementing manual database access.
+
+## Avoid AI Anti-Patterns
+
+- **Don't over-engineer**: Prefer concrete types over interfaces unless you have at least two valid implementations or need to mock for testing.
+- **Don't guess package names**: Use standard library packages first; for external packages, specify exact import paths (e.g., `github.com/gin-gonic/gin` instead of vague "import the web framework").
+- **Don't create unused helper functions**: Generate only what is explicitly needed; avoid speculative "might be useful later" functions.
+- **Don't nest conditionals deeply**: Use early returns (guard clauses) to keep code flat and readable.
+
+## Reduce Ambiguity
+
+- **Be explicit about concurrency**: If not specified, assume no goroutines, no channels. Add concurrency only when requested.
+- **Be explicit about logging**: Prefer structured logging with `zap`; avoid `fmt.Println` or `log.Print` unless specified.
+- **Be explicit about configuration**: Use environment variables or explicit config structs; avoid magic defaults.
+
+## Limit Scope
+
+- **One file per feature**: Group related types and functions in the same file; avoid splitting into tiny files unnecessarily.
+- **Limit function size**: Keep functions under 30 lines when possible; if longer, it's a signal to refactor.
+- **Limit cyclomatic complexity**: Functions should have fewer than 5 branching paths (if/switch/for).
+
+## Code That Writes Itself
+
+- **Use named return values for clarity**: Especially when returning multiple values with the same type.
+- **Prefer switch over long if-else chains**: Switch statements are more readable and harder to mis-generate.
+- **Use table-driven tests**: Generate tests with a slice of structs; easier to extend and review.

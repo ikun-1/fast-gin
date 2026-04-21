@@ -1,4 +1,3 @@
 package user
 
-type User struct {
-}
+type User struct {}

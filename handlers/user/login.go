@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"fast-gin/dal/query"
 	"fast-gin/global"
 	"fast-gin/handlers/captcha"
@@ -13,14 +14,28 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
 	Username    string `json:"username" form:"username" binding:"required" display:"用户名" example:"admin"`
 	Password    string `json:"password" form:"password" binding:"required" display:"密码" example:"123456"`
-	RePassword  string `json:"rePassword" form:"rePassword" binding:"eqfield=Password,required" display:"确认密码" example:"123456"`
-	CaptchaID   string `json:"captchaID" example:"captcha-id-123"`
-	CaptchaCode string `json:"captchaCode" example:"1234"`
+	CaptchaID   string `json:"captchaId" form:"captchaId" example:"captcha-id-123"`
+	CaptchaCode string `json:"captchaCode" form:"captchaCode" example:"1234"`
+}
+
+type LoginUserVO struct {
+	ID       uint     `json:"id"`
+	Username string   `json:"username"`
+	Nickname string   `json:"nickname,omitempty"`
+	AvatarID *uint    `json:"avatarId,omitempty"`
+	Avatar   string   `json:"avatar,omitempty"`
+	Roles    []string `json:"roles,omitempty"`
+}
+
+type LoginResponse struct {
+	Token string      `json:"token"`
+	User  LoginUserVO `json:"user"`
 }
 
 // LoginView 用户登录
@@ -30,7 +45,7 @@ type LoginRequest struct {
 // @Accept       json
 // @Produce      json
 // @Param        user  body  LoginRequest  true  "登录参数"
-// @Success      200  {object}  res.Response  "{"code":0,"msg":"success","data":"token_string"}"
+// @Success      200  {object}  res.Response  "{"code":0,"msg":"success","data":{"token":"token_string","user":{"id":1,"username":"admin"}}}"
 // @Failure      200  {object}  res.Response       "{"code":1,"msg":"invalid parameters","data":{"rePassword":"确认密码必须等于密码"}}"
 // @Router       /auth/login [post]
 func (User) LoginView(c *gin.Context) {
@@ -84,5 +99,32 @@ func (User) LoginView(c *gin.Context) {
 
 	permission_serv.WarmUserPerms(user.ID)
 
-	res.OkWithData(c, token)
+	roles := make([]string, 0)
+	if adminRoleCount > 0 {
+		roles = append(roles, permissions.RoleCode[permissions.RoleAdmin])
+	}
+
+	avatarURL := ""
+	if user.AvatarID != nil {
+		imageModel, avatarErr := query.Image.WithContext(c).
+			Where(query.Image.ID.Eq(*user.AvatarID)).
+			Take()
+		if avatarErr == nil {
+			avatarURL = imageModel.Address
+		} else if !errors.Is(avatarErr, gorm.ErrRecordNotFound) {
+			zap.S().Warnf("查询用户头像失败 userID=%d avatarID=%d err=%v", user.ID, *user.AvatarID, avatarErr)
+		}
+	}
+
+	res.OkWithData(c, LoginResponse{
+		Token: token,
+		User: LoginUserVO{
+			ID:       user.ID,
+			Username: user.Username,
+			Nickname: user.Nickname,
+			AvatarID: user.AvatarID,
+			Avatar:   avatarURL,
+			Roles:    roles,
+		},
+	})
 }

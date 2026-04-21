@@ -9,7 +9,7 @@ import (
 )
 
 type GenerateResponse struct {
-	CaptchaID  string `json:"captchaID"`
+	CaptchaID  string `json:"captchaId"`
 	Captcha    string `json:"captcha"`
 	CaptchaAns string `json:"captchaAns"`
 }
@@ -20,7 +20,7 @@ type GenerateResponse struct {
 // @Tags         captcha
 // @Accept       json
 // @Produce      json
-// @Success      200  {object}  res.Response  "{"code":0,"msg":"success","data":{"captchaID":"xxx","captcha":"data:image/png;base64,...","captchaAns":"1234"}}"
+// @Success      200  {object}  res.Response  "{"code":0,"msg":"success","data":{"captchaId":"xxx","captcha":"data:image/png;base64,...","captchaAns":"1234"}}"
 // @Failure      200  {object}  res.Response       "{"code":1,"msg":"图片验证码生成失败"}"
 // @Router       /captchas [post]
 func (Captcha) GenerateView(c *gin.Context) {

@@ -6,16 +6,15 @@ import (
 	"fast-gin/global"
 	"fast-gin/middleware"
 	"fast-gin/models"
+	"fast-gin/utils/find"
+	"fast-gin/utils/md5"
+	"fast-gin/utils/random"
 	"fast-gin/utils/res"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-
-	"fast-gin/utils/find"
-	"fast-gin/utils/md5"
-	"fast-gin/utils/random"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -41,7 +40,6 @@ var whiteList = []string{
 // @Failure      200   {object}  res.Response       "{"code":3,"msg":"用户认证失败"}"
 // @Router       /images [post]
 func (Image) UploadView(c *gin.Context) {
-	// 获取当前用户ID
 	claims := middleware.GetAuth(c)
 	if claims == nil || claims.UserID == 0 {
 		res.FailWithMsg(c, "用户认证失败")
@@ -59,9 +57,8 @@ func (Image) UploadView(c *gin.Context) {
 		res.FailWithMsg(c, "上传文件过大")
 		return
 	}
-	// 后缀判断
-	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
 
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
 	if !find.InList(whiteList, ext) {
 		res.FailWithMsg(c, "上传文件后缀非法")
 		return
@@ -77,19 +74,18 @@ func (Image) UploadView(c *gin.Context) {
 		if os.IsNotExist(err1) {
 			break
 		}
-		// 文件存在
-		// 算上传的图片和本身的图片是不是一样的，如果是一样的，那就直接返回之前的地址
+
 		uploadFile, _ := fileHeader.Open()
 		oldFile, _ := os.Open(fp)
 
 		uploadFileHash := md5.MD5WithFile(uploadFile)
 		oldFileHash := md5.MD5WithFile(oldFile)
+		_ = oldFile.Close()
+
 		if uploadFileHash == oldFileHash {
-			// 上传的图片，名称和内容都是一样的，检查数据库中是否已有记录
 			fileHash = uploadFileHash
 			imageModel, dbErr := query.Image.WithContext(c).Where(query.Image.FileHash.Eq(fileHash)).Take()
 			if dbErr == nil {
-				// 数据库中已有记录，直接返回
 				res.Ok(c, gin.H{
 					"id":      imageModel.ID,
 					"address": imageModel.Address,
@@ -100,7 +96,7 @@ func (Image) UploadView(c *gin.Context) {
 				res.FailWithMsg(c, "查询图片记录失败")
 				return
 			}
-			// 数据库中没有记录，创建新记录
+
 			imageModel = &models.Image{
 				Address:  "/" + fp,
 				FileName: fileHeader.Filename,
@@ -122,9 +118,12 @@ func (Image) UploadView(c *gin.Context) {
 		newFileName := fmt.Sprintf("%s_%s%s", fileNameNotExt, random.RandStr(3), ext)
 		fp = path.Join("uploads", global.Config.Upload.Dir, newFileName)
 	}
-	c.SaveUploadedFile(fileHeader, fp)
 
-	// 计算上传文件的hash
+	if err := c.SaveUploadedFile(fileHeader, fp); err != nil {
+		res.FailWithMsg(c, "文件保存失败")
+		return
+	}
+
 	uploadFile, _ := fileHeader.Open()
 	fileHash = md5.MD5WithFile(uploadFile)
 
@@ -135,7 +134,7 @@ func (Image) UploadView(c *gin.Context) {
 		FileHash: fileHash,
 		UserID:   claims.UserID,
 	}
-	if err = query.Image.WithContext(c).Create(imageModel); err != nil {
+	if err := query.Image.WithContext(c).Create(imageModel); err != nil {
 		res.FailWithMsg(c, "图片信息保存失败")
 		return
 	}

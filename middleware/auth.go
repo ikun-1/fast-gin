@@ -10,8 +10,20 @@ import (
 	"go.uber.org/zap"
 )
 
+func getAuthorizationToken(c *gin.Context) string {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return c.GetHeader("token")
+	}
+	const bearerPrefix = "Bearer "
+	if len(authHeader) > len(bearerPrefix) && authHeader[:len(bearerPrefix)] == bearerPrefix {
+		return authHeader[len(bearerPrefix):]
+	}
+	return authHeader
+}
+
 func AuthMiddleware(c *gin.Context) {
-	token := c.GetHeader("token")
+	token := getAuthorizationToken(c)
 	claims, err := jwts.CheckToken(token)
 	if err != nil {
 		res.FailAuth(c)
@@ -29,7 +41,7 @@ func AuthMiddleware(c *gin.Context) {
 }
 
 func AdminMiddleware(c *gin.Context) {
-	token := c.GetHeader("token")
+	token := getAuthorizationToken(c)
 	claims, err := jwts.CheckToken(token)
 	if err != nil {
 		res.FailAuth(c)
@@ -47,7 +59,7 @@ func AdminMiddleware(c *gin.Context) {
 
 // SelfOrAdminMiddleware allows access when requester is admin or matches URI user id.
 func SelfOrAdminMiddleware(c *gin.Context) {
-	token := c.GetHeader("token")
+	token := getAuthorizationToken(c)
 	claims, err := jwts.CheckToken(token)
 	if err != nil {
 		res.FailAuth(c)
@@ -66,7 +78,7 @@ func SelfOrAdminMiddleware(c *gin.Context) {
 		return
 	}
 
-	uri := GetUri[models.UpdateUri](c)
+	uri := GetUri[models.BindId](c)
 
 	if claims.UserID != uri.ID {
 		res.FailPermission(c)

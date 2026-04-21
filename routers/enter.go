@@ -16,7 +16,6 @@ func Run() {
 	r := gin.Default()
 	r.Static("/uploads", "uploads")
 
-	// 启用Swagger
 	if global.Config.System.Swagger.Enabled {
 		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 		zap.S().Infof("Swagger 已启用，访问地址: http://%s/swagger/index.html", global.Config.System.Addr())
@@ -28,6 +27,8 @@ func Run() {
 	CaptchaRouter(g)
 	ImageRouter(g)
 	RBACRouter(g)
+	RoomRouter(g)
+	SignalRouter(g)
 
 	addr := global.Config.System.Addr()
 	if global.Config.System.Mode == "release" {

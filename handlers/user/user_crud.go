@@ -44,7 +44,7 @@ type UpdateUserRequest struct {
 // @Failure      200  {object}  res.Response
 // @Router       /users/{id} [get]
 func (User) GetUserView(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	user, err := query.User.WithContext(c).Where(query.User.ID.Eq(uri.ID)).First()
 	if err != nil {
@@ -125,7 +125,7 @@ func (User) CreateUserView(c *gin.Context) {
 // @Failure      200  {object}  res.Response
 // @Router       /users/{id} [put]
 func (User) UpdateUserView(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 	req := middleware.GetJSON[UpdateUserRequest](c)
 
 	user, err := query.User.WithContext(c).Where(query.User.ID.Eq(uri.ID)).First()
@@ -153,7 +153,7 @@ func (User) UpdateUserView(c *gin.Context) {
 		}
 		user.Password = hash
 	}
-	
+
 	if _, err = query.User.WithContext(c).Where(query.User.ID.Eq(uri.ID)).Updates(user); err != nil {
 		res.FailWithCode(c, res.DatabaseErr)
 		return
@@ -174,7 +174,7 @@ func (User) UpdateUserView(c *gin.Context) {
 // @Failure      200  {object}  res.Response
 // @Router       /users/{id} [delete]
 func (User) DeleteUserView(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	user, err := query.User.WithContext(c).Where(query.User.ID.Eq(uri.ID)).First()
 	if err != nil {

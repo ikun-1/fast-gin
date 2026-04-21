@@ -23,6 +23,6 @@ type PageInfo struct {
 // MigrateModels stores all models that need schema migration.
 var MigrateModels = make([]any, 0)
 
-type UpdateUri struct {
+type BindId struct {
 	ID uint `uri:"id" binding:"required"`
 }

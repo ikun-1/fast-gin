@@ -13,24 +13,25 @@ type Response struct {
 }
 
 const (
-	Success = iota
-	InternalErr
-	NotFoundErr
-	AuthErr
-	PermissionErr
-	ParamErr
-	DatabaseErr
-	NotLoginErr
+	// 非标准http状态码以1000开始
+	Success = 0
+	InternalErr = 500
+	NotFoundErr = 404
+	AuthErr = 401
+	PermissionErr = 403
+	ParamErr = 400
+	DatabaseErr = 1001
+	NotLoginErr = 1002
 )
 
 var CodeMsgMap = map[int]string{
 	Success:       "成功",
-	InternalErr:   "内部服务器错误",
-	NotFoundErr:   "资源未找到",
-	AuthErr:       "身份验证失败",
+	InternalErr:   "服务器内部错误",
+	NotFoundErr:   "资源不存在",
+	AuthErr:       "认证失败",
 	PermissionErr: "权限不足",
-	ParamErr:      "参数无效",
-	DatabaseErr:   "数据库错误",
+	ParamErr:      "参数错误",
+	DatabaseErr:   "数据库操作失败",
 	NotLoginErr:   "用户未登录",
 }
 

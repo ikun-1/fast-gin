@@ -31,17 +31,23 @@ go run main.go
 ## 目录说明
 
 ```text
-cmd/gen          生成query查询
-handlers         路由对应的处理器函数
-config           配置的struct目录
-core             初始化操作
-flags            命令行参数
-global           全局变量
-middleware       gin的中间件
-models           表结构
-routers          路由
-service          服务(redis,定时器cron)
-utils            工具目录
-main.go          入口文件
-settings.yaml    配置文件
+fast-gin/
+├── cmd/gen/           # 代码生成工具
+├── config/            # 配置文件结构定义
+├── core/              # 核心初始化（日志、数据库、Redis）
+├── dal/query/         # GORM Gen生成的查询代码
+├── flags/             # 命令行参数解析
+├── global/            # 全局变量
+├── handlers/          # 业务处理层（controller）
+│   ├── captcha/       # 验证码
+│   ├── image/         # 图片上传
+│   ├── rbac/          # 权限管理
+│   └── user/          # 用户管理（已有登录注册）
+├── middleware/        # 中间件（认证、权限、限流）
+├── models/            # 数据模型
+├── permissions/       # 权限定义
+├── routers/           # 路由定义
+├── service/           # 业务服务层
+├── utils/             # 工具包
+└── settings.yaml      # 主配置文件
 ```

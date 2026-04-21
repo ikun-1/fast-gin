@@ -167,7 +167,7 @@ func (RBAC) ListRoles(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/roles/{id} [get]
 func (RBAC) GetRole(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	role, err := query.Role.WithContext(c).Where(query.Role.ID.Eq(uri.ID)).First()
 	if err != nil {
@@ -245,7 +245,7 @@ func (RBAC) CreateRole(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/roles/{id} [put]
 func (RBAC) UpdateRole(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 	req := middleware.GetJSON[UpdateRoleRequest](c)
 
 	role, err := query.Role.WithContext(c).Where(query.Role.ID.Eq(uri.ID)).First()
@@ -324,7 +324,7 @@ func (RBAC) UpdateRole(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/roles/{id} [delete]
 func (RBAC) DeleteRole(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	role, err := query.Role.WithContext(c).Where(query.Role.ID.Eq(uri.ID)).First()
 	if err != nil {
@@ -407,7 +407,7 @@ func (RBAC) ListPermissions(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/permissions/{id} [get]
 func (RBAC) GetPermission(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	perm, err := query.Permission.WithContext(c).Where(query.Permission.ID.Eq(uri.ID)).First()
 	if err != nil {
@@ -474,7 +474,7 @@ func (RBAC) CreatePermission(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/permissions/{id} [put]
 func (RBAC) UpdatePermission(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 	req := middleware.GetJSON[UpdatePermissionRequest](c)
 	if req.Type < 1 || req.Type > 3 {
 		req.Type = 2
@@ -513,7 +513,7 @@ func (RBAC) UpdatePermission(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/permissions/{id} [delete]
 func (RBAC) DeletePermission(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	perm, err := query.Permission.WithContext(c).Where(query.Permission.ID.Eq(uri.ID)).First()
 	if err != nil {
@@ -555,7 +555,7 @@ func (RBAC) DeletePermission(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/roles/{id}/permissions [get]
 func (RBAC) ListRolePermissions(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	list, err := query.Permission.WithContext(c).
 		Join(query.RolePermission, query.Permission.ID.EqCol(query.RolePermission.PermID)).
@@ -582,7 +582,7 @@ func (RBAC) ListRolePermissions(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/roles/{id}/permissions [post]
 func (RBAC) AttachRolePermission(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 	req := middleware.GetJSON[AttachPermissionRequest](c)
 
 	_, err := query.Role.WithContext(c).Where(query.Role.ID.Eq(uri.ID)).First()
@@ -645,7 +645,7 @@ func (RBAC) DetachRolePermission(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/users/{id}/roles [get]
 func (RBAC) ListUserRoles(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 
 	list, err := query.Role.WithContext(c).
 		Join(query.UserRole, query.Role.ID.EqCol(query.UserRole.RoleID)).
@@ -672,7 +672,7 @@ func (RBAC) ListUserRoles(c *gin.Context) {
 // @Success      200  {object}  res.Response
 // @Router       /rbac/users/{id}/roles [post]
 func (RBAC) AttachUserRole(c *gin.Context) {
-	uri := middleware.GetUri[models.UpdateUri](c)
+	uri := middleware.GetUri[models.BindId](c)
 	req := middleware.GetJSON[AttachRoleRequest](c)
 
 	_, err := query.User.WithContext(c).Where(query.User.ID.Eq(uri.ID)).First()
