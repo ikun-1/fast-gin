@@ -27,8 +27,6 @@ func Run() {
 	CaptchaRouter(g)
 	ImageRouter(g)
 	RBACRouter(g)
-	RoomRouter(g)
-	SignalRouter(g)
 
 	addr := global.Config.System.Addr()
 	if global.Config.System.Mode == "release" {

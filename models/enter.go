@@ -26,3 +26,7 @@ var MigrateModels = make([]any, 0)
 type BindId struct {
 	ID uint `uri:"id" binding:"required"`
 }
+
+type BindRoomNo struct {
+	RoomNo uint `uri:"roomNo" binding:"required"`
+}
