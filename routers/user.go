@@ -29,7 +29,7 @@ func UserRouter(g *gin.RouterGroup) {
 		middleware.ShouldBindUri[models.BindId],
 		User.GetUserView)
 	g.POST("users",
-		middleware.AdminMiddleware,
+		//middleware.AdminMiddleware,
 		middleware.ShouldBindJSON[user.CreateUserRequest],
 		User.CreateUserView)
 	g.PUT("users/:id",

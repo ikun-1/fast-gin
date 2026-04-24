@@ -11,6 +11,6 @@ const Version = "1.0.0"
 
 var (
 	Config *config.Config
-	DB *gorm.DB
-	Redis *redis.Client
+	DB     *gorm.DB
+	Redis  *redis.Client
 )

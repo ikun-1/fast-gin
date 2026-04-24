@@ -2,6 +2,7 @@ package routers
 
 import (
 	"fast-gin/global"
+	"fast-gin/service/ws_serv"
 
 	_ "fast-gin/docs"
 
@@ -10,6 +11,13 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 )
+
+var hub *ws_serv.Hub
+
+func InitHub() {
+	hub = ws_serv.NewHub()
+	go hub.Run()
+}
 
 func Run() {
 	gin.SetMode(global.Config.System.Mode)
@@ -27,6 +35,8 @@ func Run() {
 	CaptchaRouter(g)
 	ImageRouter(g)
 	RBACRouter(g)
+	MeetingRouter(g)
+	SignalingRouter(g)
 
 	addr := global.Config.System.Addr()
 	if global.Config.System.Mode == "release" {

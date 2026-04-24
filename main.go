@@ -34,5 +34,6 @@ func main() {
 	permission_serv.InitRolePermCache()
 	cron_serv.InitCron()
 
+	routers.InitHub()
 	routers.Run()
 }

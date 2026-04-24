@@ -7,9 +7,9 @@ import (
 )
 
 type Response struct {
-	Code int
-	Msg  string
-	Data any `json:"data,omitempty"`
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data any    `json:"data,omitempty"`
 }
 
 const (

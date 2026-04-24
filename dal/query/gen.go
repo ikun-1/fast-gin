@@ -16,18 +16,22 @@ import (
 )
 
 var (
-	Q              = new(Query)
-	Image          *image
-	Permission     *permission
-	Role           *role
-	RolePermission *rolePermission
-	User           *user
-	UserRole       *userRole
+	Q                  = new(Query)
+	Image              *image
+	Meeting            *meeting
+	MeetingParticipant *meetingParticipant
+	Permission         *permission
+	Role               *role
+	RolePermission     *rolePermission
+	User               *user
+	UserRole           *userRole
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
 	Image = &Q.Image
+	Meeting = &Q.Meeting
+	MeetingParticipant = &Q.MeetingParticipant
 	Permission = &Q.Permission
 	Role = &Q.Role
 	RolePermission = &Q.RolePermission
@@ -37,38 +41,44 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:             db,
-		Image:          newImage(db, opts...),
-		Permission:     newPermission(db, opts...),
-		Role:           newRole(db, opts...),
-		RolePermission: newRolePermission(db, opts...),
-		User:           newUser(db, opts...),
-		UserRole:       newUserRole(db, opts...),
+		db:                 db,
+		Image:              newImage(db, opts...),
+		Meeting:            newMeeting(db, opts...),
+		MeetingParticipant: newMeetingParticipant(db, opts...),
+		Permission:         newPermission(db, opts...),
+		Role:               newRole(db, opts...),
+		RolePermission:     newRolePermission(db, opts...),
+		User:               newUser(db, opts...),
+		UserRole:           newUserRole(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	Image          image
-	Permission     permission
-	Role           role
-	RolePermission rolePermission
-	User           user
-	UserRole       userRole
+	Image              image
+	Meeting            meeting
+	MeetingParticipant meetingParticipant
+	Permission         permission
+	Role               role
+	RolePermission     rolePermission
+	User               user
+	UserRole           userRole
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:             db,
-		Image:          q.Image.clone(db),
-		Permission:     q.Permission.clone(db),
-		Role:           q.Role.clone(db),
-		RolePermission: q.RolePermission.clone(db),
-		User:           q.User.clone(db),
-		UserRole:       q.UserRole.clone(db),
+		db:                 db,
+		Image:              q.Image.clone(db),
+		Meeting:            q.Meeting.clone(db),
+		MeetingParticipant: q.MeetingParticipant.clone(db),
+		Permission:         q.Permission.clone(db),
+		Role:               q.Role.clone(db),
+		RolePermission:     q.RolePermission.clone(db),
+		User:               q.User.clone(db),
+		UserRole:           q.UserRole.clone(db),
 	}
 }
 
@@ -82,33 +92,39 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:             db,
-		Image:          q.Image.replaceDB(db),
-		Permission:     q.Permission.replaceDB(db),
-		Role:           q.Role.replaceDB(db),
-		RolePermission: q.RolePermission.replaceDB(db),
-		User:           q.User.replaceDB(db),
-		UserRole:       q.UserRole.replaceDB(db),
+		db:                 db,
+		Image:              q.Image.replaceDB(db),
+		Meeting:            q.Meeting.replaceDB(db),
+		MeetingParticipant: q.MeetingParticipant.replaceDB(db),
+		Permission:         q.Permission.replaceDB(db),
+		Role:               q.Role.replaceDB(db),
+		RolePermission:     q.RolePermission.replaceDB(db),
+		User:               q.User.replaceDB(db),
+		UserRole:           q.UserRole.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	Image          IImageDo
-	Permission     IPermissionDo
-	Role           IRoleDo
-	RolePermission IRolePermissionDo
-	User           IUserDo
-	UserRole       IUserRoleDo
+	Image              IImageDo
+	Meeting            IMeetingDo
+	MeetingParticipant IMeetingParticipantDo
+	Permission         IPermissionDo
+	Role               IRoleDo
+	RolePermission     IRolePermissionDo
+	User               IUserDo
+	UserRole           IUserRoleDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		Image:          q.Image.WithContext(ctx),
-		Permission:     q.Permission.WithContext(ctx),
-		Role:           q.Role.WithContext(ctx),
-		RolePermission: q.RolePermission.WithContext(ctx),
-		User:           q.User.WithContext(ctx),
-		UserRole:       q.UserRole.WithContext(ctx),
+		Image:              q.Image.WithContext(ctx),
+		Meeting:            q.Meeting.WithContext(ctx),
+		MeetingParticipant: q.MeetingParticipant.WithContext(ctx),
+		Permission:         q.Permission.WithContext(ctx),
+		Role:               q.Role.WithContext(ctx),
+		RolePermission:     q.RolePermission.WithContext(ctx),
+		User:               q.User.WithContext(ctx),
+		UserRole:           q.UserRole.WithContext(ctx),
 	}
 }
 

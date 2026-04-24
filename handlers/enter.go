@@ -3,9 +3,8 @@ package handlers
 import (
 	"fast-gin/handlers/captcha"
 	"fast-gin/handlers/image"
+	"fast-gin/handlers/meeting"
 	"fast-gin/handlers/rbac"
-	"fast-gin/handlers/room"
-	"fast-gin/handlers/signal"
 	"fast-gin/handlers/user"
 )
 
@@ -14,8 +13,7 @@ type Handler struct {
 	Captcha captcha.Captcha
 	Image   image.Image
 	RBAC    rbac.RBAC
-	Room    room.Room
-	Signal  signal.Signal
+	Meeting meeting.Meeting
 }
 
 var Handlers = new(Handler)

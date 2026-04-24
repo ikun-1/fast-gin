@@ -13,7 +13,7 @@ func RBACRouter(g *gin.RouterGroup) {
 	RBAC := handlers.Handlers.RBAC
 
 	r := g.Group("rbac")
-	r.Use(middleware.AdminMiddleware)
+	//r.Use(middleware.AdminMiddleware)
 
 	r.GET("roles", middleware.ShouldBindQuery[models.PageInfo], RBAC.ListRoles)
 	r.GET("roles/:id", middleware.ShouldBindUri[models.BindId], RBAC.GetRole)
