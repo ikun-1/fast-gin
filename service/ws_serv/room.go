@@ -3,6 +3,7 @@ package ws_serv
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/pion/rtcp"
@@ -165,7 +166,7 @@ func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, r
 		if id == clientID {
 			continue
 		}
-		r.addTrackToPeer(client, localTrack)
+		r.addTrackToPeer(client, localTrack, uint32(remoteTrack.SSRC()))
 	}
 	r.mu.RUnlock()
 
@@ -186,7 +187,7 @@ func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, r
 	}
 }
 
-func (r *Room) addTrackToPeer(client *Client, track *webrtc.TrackLocalStaticRTP) {
+func (r *Room) addTrackToPeer(client *Client, track *webrtc.TrackLocalStaticRTP, sourceSSRC uint32) {
 	if client.PC == nil {
 		return
 	}
@@ -204,11 +205,50 @@ func (r *Room) addTrackToPeer(client *Client, track *webrtc.TrackLocalStaticRTP)
 		return
 	}
 
+	// Extract source client ID from the relay track's stream ID ("stream_{clientID}")
+	srcClientID := strings.TrimPrefix(track.StreamID(), "stream_")
+
+	// Read RTCP from the subscriber and forward PLI/FIR keyframe requests
+	// to the source client. The subscriber's PLI has the relay track's SSRC
+	// (assigned by Pion), but the source browser only recognizes its own
+	// outgoing SSRC — so we rewrite MediaSSRC before forwarding.
 	go func() {
 		for {
-			_, _, rtcpErr := sender.ReadRTCP()
+			packets, _, rtcpErr := sender.ReadRTCP()
 			if rtcpErr != nil {
 				return
+			}
+			for _, pkt := range packets {
+				switch p := pkt.(type) {
+				case *rtcp.PictureLossIndication:
+					if srcClientID == "" || srcClientID == client.ClientID {
+						continue
+					}
+					// Rewrite SSRC to match the source's original SSRC;
+					// without this the source browser ignores the PLI.
+					p.MediaSSRC = sourceSSRC
+					r.mu.RLock()
+					srcClient, ok := r.Clients[srcClientID]
+					r.mu.RUnlock()
+					if ok && srcClient.PC != nil {
+						if err := srcClient.PC.WriteRTCP([]rtcp.Packet{p}); err != nil {
+							zap.S().Warnf("RTCP PLI forward failed: %s", err)
+						}
+					}
+				case *rtcp.FullIntraRequest:
+					if srcClientID == "" || srcClientID == client.ClientID {
+						continue
+					}
+					p.MediaSSRC = sourceSSRC
+					r.mu.RLock()
+					srcClient, ok := r.Clients[srcClientID]
+					r.mu.RUnlock()
+					if ok && srcClient.PC != nil {
+						if err := srcClient.PC.WriteRTCP([]rtcp.Packet{p}); err != nil {
+							zap.S().Warnf("RTCP FIR forward failed: %s", err)
+						}
+					}
+				}
 			}
 		}
 	}()
@@ -233,7 +273,7 @@ func (r *Room) SubscribeExistingTracks(newClient *Client) {
 			continue
 		}
 		for _, info := range tracks {
-			r.addTrackToPeer(newClient, info.LocalTrack)
+			r.addTrackToPeer(newClient, info.LocalTrack, uint32(info.RemoteTrack.SSRC()))
 
 			// Collect PLI requests: ask the source to send a keyframe
 			// so the new subscriber can decode immediately instead of
@@ -266,3 +306,4 @@ func (r *Room) SubscribeExistingTracks(newClient *Client) {
 		}(req.ssrc, req.pc)
 	}
 }
+
