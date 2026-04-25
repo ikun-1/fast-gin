@@ -18,6 +18,8 @@ type WsClientMessage struct {
 	Kind  string `json:"kind,omitempty"`
 	// chat-message
 	Text string `json:"text,omitempty"`
+	// recording-control
+	Action string `json:"action,omitempty"`
 }
 
 // ---------- Server -> Client ----------
@@ -80,4 +82,11 @@ type ChatMessageData struct {
 // Server-initiated SDP offer for renegotiation (forwarded track from another client)
 type RenegotiationOffer struct {
 	SDP string `json:"sdp"`
+}
+
+// Recording control data (server -> client)
+type RecordingControlData struct {
+	Action     string `json:"action"` // "started" or "stopped"
+	StartedAt  string `json:"startedAt,omitempty"`
+	DurationMs int64  `json:"durationMs,omitempty"`
 }

@@ -1,5 +1,5 @@
 db:
-  mode: mysql  # mysql sqlite redis
+  mode: mysql # mysql sqlite redis
   db_name: fast_gin
   host: 127.0.0.1
   port: 3306
@@ -35,3 +35,7 @@ webrtc:
     - urls:
         - "stun:stun.l.google.com:19302"
         - "stun:stun1.l.google.com:19302"
+
+recording:
+  dir: recordings
+  max_size: 1024

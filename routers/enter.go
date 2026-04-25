@@ -36,6 +36,7 @@ func Run() {
 	ImageRouter(g)
 	RBACRouter(g)
 	MeetingRouter(g)
+	RecordingRouter(g)
 	SignalingRouter(g)
 
 	addr := global.Config.System.Addr()

@@ -85,6 +85,8 @@ func (h *Hub) HandleMessage(client *Client, msg *WsClientMessage) {
 		h.handleScreenShareStop(client)
 	case "chat-message":
 		h.handleChatMessage(client, msg)
+	case "recording-control":
+		h.handleRecordingControl(client, msg)
 	default:
 		client.SendJSON(WsServerMessage{Type: "error", Data: "unknown message type"})
 	}
@@ -229,8 +231,8 @@ func (h *Hub) handleOffer(client *Client, msg *WsClientMessage) {
 
 		// Handle incoming tracks from this client
 		pc.OnTrack(func(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-			zap.S().Infof("Received track client=%s kind=%s id=%s",
-				client.ClientID, remoteTrack.Kind(), remoteTrack.ID())
+			zap.S().Infof("Received track client=%s kind=%s id=%s codec=%s",
+				client.ClientID, remoteTrack.Kind(), remoteTrack.ID(), remoteTrack.Codec().MimeType)
 			room.RegisterTrack(client.ClientID, remoteTrack, receiver)
 		})
 	}
@@ -384,4 +386,92 @@ func (h *Hub) handleChatMessage(client *Client, msg *WsClientMessage) {
 			Text:         msg.Text,
 		},
 	}, "")
+}
+
+func (h *Hub) handleRecordingControl(client *Client, msg *WsClientMessage) {
+	room, exists := h.Rooms[client.RoomNo]
+	if !exists {
+		return
+	}
+
+	// Only the host can control recording
+	if !client.IsHost {
+		client.SendJSON(WsServerMessage{Type: "error", Data: "仅主持人可以控制录制"})
+		return
+	}
+
+	switch msg.Action {
+	case "start":
+		if GlobalRecordingManager.IsRecording(client.RoomNo) {
+			client.SendJSON(WsServerMessage{Type: "error", Data: "录制已在进行中"})
+			return
+		}
+		var meeting models.Meeting
+		if err := global.DB.Where("room_no = ?", client.RoomNo).First(&meeting).Error; err != nil {
+			client.SendJSON(WsServerMessage{Type: "error", Data: "会议不存在"})
+			return
+		}
+		session, err := GlobalRecordingManager.StartSession(client.RoomNo, meeting.ID, client.UserID)
+		if err != nil {
+			client.SendJSON(WsServerMessage{Type: "error", Data: "启动录制失败: " + err.Error()})
+			return
+		}
+		room.trackMu.RLock()
+		for clientID, tracks := range room.TrackLocals {
+			for _, info := range tracks {
+				if c := room.GetClient(clientID); c != nil {
+					if _, err := session.EnsureWriter(clientID, c.UserID, c.DisplayName, info.RemoteTrack.Codec().MimeType); err != nil {
+						zap.S().Warnf("Recording EnsureWriter failed: %s", err)
+					}
+				}
+			}
+		}
+		// Request key frames from all video sources so the recording
+		// contains a key frame to start decoding from
+		for srcID, tracks := range room.TrackLocals {
+			for _, info := range tracks {
+				if info.RemoteTrack.Kind() == webrtc.RTPCodecTypeVideo {
+					room.mu.RLock()
+					srcClient, ok := room.Clients[srcID]
+					room.mu.RUnlock()
+					if ok && srcClient.PC != nil {
+						go func(ssrc webrtc.SSRC, pc *webrtc.PeerConnection) {
+							if err := pc.WriteRTCP([]rtcp.Packet{
+								&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)},
+							}); err != nil {
+								zap.S().Warnf("Recording PLI failed client=%s: %s", srcID, err)
+							}
+						}(info.RemoteTrack.SSRC(), srcClient.PC)
+					}
+				}
+			}
+		}
+		room.trackMu.RUnlock()
+		room.SetRecorder(session)
+		room.Broadcast(WsServerMessage{
+			Type: "recording-started",
+			Data: RecordingControlData{
+				Action:    "started",
+				StartedAt: session.StartedAt.Format("2006-01-02 15:04:05"),
+			},
+		}, "")
+	case "stop":
+		if !GlobalRecordingManager.IsRecording(client.RoomNo) {
+			client.SendJSON(WsServerMessage{Type: "error", Data: "当前没有进行中的录制"})
+			return
+		}
+		room.ClearRecorder()
+		durationMs, err := GlobalRecordingManager.StopSession(client.RoomNo)
+		if err != nil {
+			client.SendJSON(WsServerMessage{Type: "error", Data: "停止录制失败: " + err.Error()})
+			return
+		}
+		room.Broadcast(WsServerMessage{
+			Type: "recording-stopped",
+			Data: RecordingControlData{
+				Action:     "stopped",
+				DurationMs: durationMs,
+			},
+		}, "")
+	}
 }

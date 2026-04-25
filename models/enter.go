@@ -30,3 +30,8 @@ type BindId struct {
 type BindRoomNo struct {
 	RoomNo uint `uri:"roomNo" binding:"required"`
 }
+
+type BindFileId struct {
+	ID     uint `uri:"id" binding:"required"`
+	FileID uint `uri:"fileId" binding:"required"`
+}

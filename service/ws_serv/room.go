@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -26,6 +27,8 @@ type Room struct {
 
 	TrackLocals map[string][]*TrackInfo
 	trackMu     sync.RWMutex
+
+	recorder atomic.Pointer[RecordingSession]
 }
 
 func NewRoom(roomNo uint) *Room {
@@ -109,6 +112,18 @@ func (r *Room) ForEachClient(fn func(clientID string, client *Client)) {
 	}
 }
 
+func (r *Room) SetRecorder(s *RecordingSession) {
+	r.recorder.Store(s)
+}
+
+func (r *Room) GetRecorder() *RecordingSession {
+	return r.recorder.Load()
+}
+
+func (r *Room) ClearRecorder() {
+	r.recorder.Store(nil)
+}
+
 // ---------- SFU: Track Management ----------
 
 func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
@@ -137,9 +152,10 @@ func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, r
 	r.TrackLocals[clientID] = append(r.TrackLocals[clientID], info)
 	r.trackMu.Unlock()
 
-	// Relay: read RTP from remote track → write to local track
+	// Relay: read RTP from remote track, write to local track + recording
 	go func() {
 		buf := make([]byte, 1460)
+		kind := remoteTrack.Kind()
 		for {
 			select {
 			case <-stopCh:
@@ -156,9 +172,26 @@ func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, r
 				if writeErr := localTrack.WriteRTP(&pkt); writeErr != nil {
 					return
 				}
+				// Best-effort recording capture (never blocks the relay)
+				if recorder := r.GetRecorder(); recorder != nil {
+					if tw := recorder.GetWriter(clientID, kind); tw != nil {
+						if err := tw.WriteRTP(&pkt); err != nil {
+							zap.S().Warnf("Recording write failed client=%s: %s", clientID, err)
+						}
+					}
+				}
 			}
 		}
 	}()
+
+	// If recording is active, ensure this track has a writer
+	if recorder := r.GetRecorder(); recorder != nil {
+		if c := r.GetClient(clientID); c != nil {
+			if _, err := recorder.EnsureWriter(clientID, c.UserID, c.DisplayName, remoteTrack.Codec().MimeType); err != nil {
+				zap.S().Warnf("Failed to create recording writer for client=%s: %s", clientID, err)
+			}
+		}
+	}
 
 	// Subscribe this new track to all other clients
 	r.mu.RLock()
@@ -275,6 +308,15 @@ func (r *Room) SubscribeExistingTracks(newClient *Client) {
 		for _, info := range tracks {
 			r.addTrackToPeer(newClient, info.LocalTrack, uint32(info.RemoteTrack.SSRC()))
 
+			// If recording is active, ensure writers for existing tracks
+			if recorder := r.GetRecorder(); recorder != nil {
+				if c := r.GetClient(clientID); c != nil {
+					if _, err := recorder.EnsureWriter(clientID, c.UserID, c.DisplayName, info.RemoteTrack.Codec().MimeType); err != nil {
+						zap.S().Warnf("Failed to create recording writer for client=%s: %s", clientID, err)
+					}
+				}
+			}
+
 			// Collect PLI requests: ask the source to send a keyframe
 			// so the new subscriber can decode immediately instead of
 			// waiting for the next periodic keyframe (which causes black screen).
@@ -306,4 +348,3 @@ func (r *Room) SubscribeExistingTracks(newClient *Client) {
 		}(req.ssrc, req.pc)
 	}
 }
-

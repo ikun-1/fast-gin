@@ -95,6 +95,7 @@ require (
 )
 
 require (
+	github.com/at-wat/ebml-go v0.18.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
