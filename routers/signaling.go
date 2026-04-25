@@ -34,15 +34,25 @@ func SignalingRouter(g *gin.RouterGroup) {
 
 		// Get user display name
 		displayName := ""
+		avatar := ""
 		user, err := query.User.WithContext(c).
 			Where(query.User.ID.Eq(claims.UserID)).
-			Select(query.User.Nickname, query.User.Username).
+			Select(query.User.Nickname, query.User.Username, query.User.AvatarID).
 			First()
 		if err == nil {
 			if user.Nickname != "" {
 				displayName = user.Nickname
 			} else {
 				displayName = user.Username
+			}
+
+			if user.AvatarID != nil {
+				imageModel, imageErr := query.Image.WithContext(c).
+					Where(query.Image.ID.Eq(*user.AvatarID)).
+					Take()
+				if imageErr == nil {
+					avatar = imageModel.Address
+				}
 			}
 		}
 
@@ -52,7 +62,7 @@ func SignalingRouter(g *gin.RouterGroup) {
 			return
 		}
 
-		client := ws_serv.NewClient(hub, conn, claims.UserID, displayName)
+		client := ws_serv.NewClient(hub, conn, claims.UserID, displayName, avatar)
 		hub.Register <- client
 
 		go client.WritePump()

@@ -20,6 +20,7 @@ type Client struct {
 	ClientID    string
 	RoomNo      uint
 	DisplayName string
+	Avatar      string
 	IsHost      bool
 	mu          sync.Mutex
 
@@ -39,7 +40,7 @@ type Client struct {
 
 var clientIDCounter uint64
 
-func NewClient(hub *Hub, conn *websocket.Conn, userID uint, displayName string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, userID uint, displayName, avatar string) *Client {
 	return &Client{
 		Hub:           hub,
 		Conn:          conn,
@@ -47,6 +48,7 @@ func NewClient(hub *Hub, conn *websocket.Conn, userID uint, displayName string) 
 		UserID:        userID,
 		ClientID:      fmt.Sprintf("user_%d_%d", userID, atomic.AddUint64(&clientIDCounter, 1)),
 		DisplayName:   displayName,
+		Avatar:        avatar,
 		negotiateChan: make(chan struct{}, 1),
 	}
 }

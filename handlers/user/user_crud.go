@@ -10,6 +10,7 @@ import (
 	"fast-gin/utils/res"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -29,7 +30,20 @@ type UpdateUserRequest struct {
 	RealName string `json:"realName" example:"Tom Updated"`
 	Email    string `json:"email" example:"tom.updated@example.com"`
 	Phone    string `json:"phone" example:"13900139000"`
+	AvatarID *uint  `json:"avatarId" example:"1"`
 	Status   int8   `json:"status" default:"1" example:"1"`
+}
+
+type UserProfileVO struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+	Nickname string `json:"nickname,omitempty"`
+	RealName string `json:"realName,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Phone    string `json:"phone,omitempty"`
+	AvatarID *uint  `json:"avatarId,omitempty"`
+	Avatar   string `json:"avatar,omitempty"`
+	Status   int8   `json:"status"`
 }
 
 // GetUserView 用户详情
@@ -56,7 +70,29 @@ func (User) GetUserView(c *gin.Context) {
 		return
 	}
 
-	res.OkWithData(c, user)
+	avatarURL := ""
+	if user.AvatarID != nil {
+		imageModel, avatarErr := query.Image.WithContext(c).
+			Where(query.Image.ID.Eq(*user.AvatarID)).
+			Take()
+		if avatarErr == nil {
+			avatarURL = imageModel.Address
+		} else if !errors.Is(avatarErr, gorm.ErrRecordNotFound) {
+			zap.S().Warnf("查询用户头像失败 userID=%d avatarID=%d err=%v", user.ID, *user.AvatarID, avatarErr)
+		}
+	}
+
+	res.OkWithData(c, UserProfileVO{
+		ID:       user.ID,
+		Username: user.Username,
+		Nickname: user.Nickname,
+		RealName: user.RealName,
+		Email:    user.Email,
+		Phone:    user.Phone,
+		AvatarID: user.AvatarID,
+		Avatar:   avatarURL,
+		Status:   user.Status,
+	})
 }
 
 // CreateUserView 创建用户
@@ -142,6 +178,9 @@ func (User) UpdateUserView(c *gin.Context) {
 	user.RealName = req.RealName
 	user.Email = req.Email
 	user.Phone = req.Phone
+	if req.AvatarID != nil {
+		user.AvatarID = req.AvatarID
+	}
 	if req.Status == 0 || req.Status == 1 {
 		user.Status = req.Status
 	}

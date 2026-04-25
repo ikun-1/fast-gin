@@ -136,6 +136,7 @@ func (h *Hub) handleJoinRoom(client *Client, msg *WsClientMessage) {
 		participants = append(participants, ParticipantInfo{
 			ClientID:    c.ClientID,
 			DisplayName: c.DisplayName,
+			Avatar:      c.Avatar,
 			IsHost:      c.IsHost,
 		})
 	})
@@ -156,6 +157,7 @@ func (h *Hub) handleJoinRoom(client *Client, msg *WsClientMessage) {
 		Data: UserJoinedData{
 			ClientID:    client.ClientID,
 			DisplayName: client.DisplayName,
+			Avatar:      client.Avatar,
 			IsHost:      client.IsHost,
 		},
 	}, client.ClientID)

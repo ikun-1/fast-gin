@@ -32,6 +32,7 @@ type WsServerMessage struct {
 type ParticipantInfo struct {
 	ClientID    string `json:"clientId"`
 	DisplayName string `json:"displayName"`
+	Avatar      string `json:"avatar,omitempty"`
 	IsHost      bool   `json:"isHost"`
 	IsMuted     bool   `json:"isMuted"`
 	IsCamOff    bool   `json:"isCamOff"`
@@ -46,6 +47,7 @@ type RoomJoinedData struct {
 type UserJoinedData struct {
 	ClientID    string `json:"clientId"`
 	DisplayName string `json:"displayName"`
+	Avatar      string `json:"avatar,omitempty"`
 	IsHost      bool   `json:"isHost"`
 }
 
