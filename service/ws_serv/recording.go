@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -60,7 +61,15 @@ type webmRecorderWriter struct {
 	audioBaseTS int64 // RTP timestamp of first audio frame
 
 	// Pending — buffered writes before muxer is ready
-	pending []func()
+	// Each item includes track number, timestamp, and write function
+	pending []pendingFrame
+}
+
+// pendingFrame represents a frame waiting to be written when muxer is ready
+type pendingFrame struct {
+	trackNum int64 // 1 for video, 2 for audio
+	tsMs     int64 // timestamp in milliseconds
+	writeFn  func() error
 }
 
 func newWebMWriter(path string) (*webmRecorderWriter, error) {
@@ -136,9 +145,21 @@ func (w *webmRecorderWriter) initMuxerLocked() {
 
 	w.muxerInit = true
 
-	// Flush pending writes
-	for _, fn := range w.pending {
-		fn()
+	// Sort pending frames by timestamp to ensure DTS monotonicity
+	// This prevents "non-monotonically increasing dts" errors
+	sort.Slice(w.pending, func(i, j int) bool {
+		if w.pending[i].tsMs != w.pending[j].tsMs {
+			return w.pending[i].tsMs < w.pending[j].tsMs
+		}
+		// For same timestamp, video should come before audio
+		return w.pending[i].trackNum < w.pending[j].trackNum
+	})
+
+	// Flush pending writes in sorted order
+	for _, pf := range w.pending {
+		if err := pf.writeFn(); err != nil {
+			zap.S().Warnf("Write pending frame failed: %s", err)
+		}
 	}
 	w.pending = nil
 }
@@ -225,10 +246,16 @@ func (w *webmRecorderWriter) flushVideoFrameLocked() {
 		// Buffer until muxer is ready
 		buf := make([]byte, len(w.vp8Buf))
 		copy(buf, w.vp8Buf)
-		w.pending = append(w.pending, func() {
-			if _, err := w.videoWriter.Write(isKey, tsMs, buf); err != nil {
-				zap.S().Warnf("WebM video write failed: %s", err)
-			}
+		w.pending = append(w.pending, pendingFrame{
+			trackNum: 1, // video
+			tsMs:     tsMs,
+			writeFn: func() error {
+				_, err := w.videoWriter.Write(isKey, tsMs, buf)
+				if err != nil {
+					zap.S().Warnf("WebM video write failed: %s", err)
+				}
+				return err
+			},
 		})
 		w.vp8Buf = w.vp8Buf[:0]
 		return
@@ -257,10 +284,16 @@ func (w *webmRecorderWriter) writeAudio(pkt *rtp.Packet) {
 	if !w.muxerInit {
 		buf := make([]byte, len(pkt.Payload))
 		copy(buf, pkt.Payload)
-		w.pending = append(w.pending, func() {
-			if _, err := w.audioWriter.Write(true, tsMs, buf); err != nil {
-				zap.S().Warnf("WebM audio write failed: %s", err)
-			}
+		w.pending = append(w.pending, pendingFrame{
+			trackNum: 2, // audio
+			tsMs:     tsMs,
+			writeFn: func() error {
+				_, err := w.audioWriter.Write(true, tsMs, buf)
+				if err != nil {
+					zap.S().Warnf("WebM audio write failed: %s", err)
+				}
+				return err
+			},
 		})
 		return
 	}
@@ -296,13 +329,26 @@ func (w *webmRecorderWriter) closeRefCount() {
 	}
 	w.mu.Unlock()
 
+	// Close track writers
 	if w.videoWriter != nil {
-		_ = w.videoWriter.Close()
+		if err := w.videoWriter.Close(); err != nil {
+			zap.S().Warnf("Close video writer failed: %s", err)
+		}
 	}
 	if w.audioWriter != nil {
-		_ = w.audioWriter.Close()
+		if err := w.audioWriter.Close(); err != nil {
+			zap.S().Warnf("Close audio writer failed: %s", err)
+		}
 	}
-	// The file is closed by the muxer automatically
+
+	// Explicitly close the file to ensure all data is flushed and mux structure is complete
+	if w.file != nil {
+		if err := w.file.Close(); err != nil {
+			zap.S().Warnf("Close WebM file failed path=%s: %s", w.filePath, err)
+		}
+	}
+
+	zap.S().Infof("WebM recording finalized: %s", w.filePath)
 }
 
 // webmVideoWriter implements RecorderWriter for the video track.
