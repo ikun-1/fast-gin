@@ -425,6 +425,22 @@ func (h *Hub) handleRecordingControl(client *Client, msg *WsClientMessage) {
 					if _, err := session.EnsureWriter(clientID, c.UserID, c.DisplayName, info.RemoteTrack.Codec().MimeType); err != nil {
 						zap.S().Warnf("Recording EnsureWriter failed: %s", err)
 					}
+					// Set PLI callback on video writers for on-demand key frame requests
+					if info.RemoteTrack.Kind() == webrtc.RTPCodecTypeVideo && c.PC != nil {
+						if tw := session.GetWriter(clientID, webrtc.RTPCodecTypeVideo); tw != nil {
+							if vw, ok := tw.RecorderWriter.(*IVFRecorderWriter); ok {
+								ssrc := info.RemoteTrack.SSRC()
+								pc := c.PC
+								vw.SetPLIFn(func() {
+									if err := pc.WriteRTCP([]rtcp.Packet{
+										&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)},
+									}); err != nil {
+										zap.S().Warnf("Recording on-demand PLI failed client=%s: %s", clientID, err)
+									}
+								})
+							}
+						}
+					}
 				}
 			}
 		}

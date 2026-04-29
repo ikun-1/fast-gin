@@ -170,6 +170,28 @@ func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, r
 	r.TrackLocals[clientID] = append(r.TrackLocals[clientID], info)
 	r.trackMu.Unlock()
 
+	// If recording is active, ensure writer exists and set up PLI callback
+	// for on-demand key frame requests when packet loss is detected.
+	if recorder := r.GetRecorder(); recorder != nil && kind == webrtc.RTPCodecTypeVideo {
+		if c := r.GetClient(clientID); c != nil && c.PC != nil {
+			if _, err := recorder.EnsureWriter(clientID, c.UserID, c.DisplayName, remoteTrack.Codec().MimeType); err == nil {
+				if tw := recorder.GetWriter(clientID, kind); tw != nil {
+					if vw, ok := tw.RecorderWriter.(*IVFRecorderWriter); ok {
+						ssrc := remoteTrack.SSRC()
+						pc := c.PC
+						vw.SetPLIFn(func() {
+							if err := pc.WriteRTCP([]rtcp.Packet{
+								&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)},
+							}); err != nil {
+								zap.S().Warnf("Recording PLI (new track) failed client=%s: %s", clientID, err)
+							}
+						})
+					}
+				}
+			}
+		}
+	}
+
 	// Relay: read RTP from remote track, write to local track + recording
 	go func() {
 		buf := make([]byte, 1460)

@@ -45,6 +45,13 @@ type IVFRecorderWriter struct {
 	// Resolution (parsed from first key frame)
 	width  uint16
 	height uint16
+
+	// PLI callback — called when RTP loss is detected, to request a key frame
+	pliFn func()
+}
+
+func (w *IVFRecorderWriter) SetPLIFn(fn func()) {
+	w.pliFn = fn
 }
 
 func NewIVFWriter(path string) (*IVFRecorderWriter, error) {
@@ -71,6 +78,9 @@ func (w *IVFRecorderWriter) WriteRTP(pkt *rtp.Packet) error {
 		if pkt.SequenceNumber != expected {
 			w.vp8Buf = w.vp8Buf[:0]
 			w.vp8Started = false
+			if w.pliFn != nil {
+				w.pliFn()
+			}
 		}
 	}
 	w.vp8LastSeq = pkt.SequenceNumber
