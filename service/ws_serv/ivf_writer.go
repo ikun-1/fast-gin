@@ -161,10 +161,13 @@ func (w *IVFRecorderWriter) flushFrame() {
 }
 
 func (w *IVFRecorderWriter) writeHeader() {
-	// Use sensible defaults if resolution wasn't parsed from VP8 bitstream
+	// Use sensible defaults if resolution wasn't parsed from VP8 bitstream.
+	// The VP8 key frame header is complex (segmentation, loop filter, etc.
+	// before the frame size fields), so our simple parser often returns
+	// garbage for non-trivial headers. Sanity-check the result.
 	width := w.width
 	height := w.height
-	if width == 0 || height == 0 {
+	if width < 16 || height < 16 || width > 7680 || height > 4320 {
 		width = 1280
 		height = 720
 		zap.S().Debugf("IVF header using default resolution %dx%d (parsed=%dx%d)",
