@@ -466,7 +466,7 @@ func WriteOggOpus(packets []opusPacket, outputPath string) error {
 	serial := uint32(1)
 	pageSeq := uint32(0)
 
-	// ---- Page 0: BOS (OpusHead + OpusTags) ----
+	// ---- Page 0: BOS with ONLY OpusHead (per RFC 7845 §3) ----
 	// OpusHead packet (19 bytes)
 	opusHead := make([]byte, 19)
 	copy(opusHead[0:8], []byte("OpusHead"))
@@ -477,15 +477,15 @@ func WriteOggOpus(packets []opusPacket, outputPath string) error {
 	binary.LittleEndian.PutUint16(opusHead[16:18], 0) // output gain
 	opusHead[18] = 0                    // mapping family
 
-	// OpusTags packet (minimum)
+	// Write BOS page (OpusHead alone, per spec)
+	writeOggPage(f, serial, &pageSeq, 0x02, 0, [][]byte{opusHead})
+
+	// ---- Page 1: OpusTags (per RFC 7845 §3: second page) ----
 	opusTags := make([]byte, 8+4)
 	copy(opusTags[0:8], []byte("OpusTags"))
 	binary.LittleEndian.PutUint32(opusTags[8:12], 0) // vendor string length (empty)
-	// user comment list length = 0 (implied by no more data)
 
-	// Write BOS page
-	writeOggPage(f, serial, &pageSeq, 0x02, 0,
-		[][]byte{opusHead, opusTags})
+	writeOggPage(f, serial, &pageSeq, 0x00, 0, [][]byte{opusTags})
 
 	if len(packets) == 0 {
 		// Write EOS page for empty file
