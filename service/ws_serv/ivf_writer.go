@@ -494,21 +494,21 @@ func WriteOggOpus(packets []opusPacket, outputPath string) error {
 	}
 
 	// ---- Data pages ----
-	// Accumulate packets per page (aim for < 64KB of segment data)
+	// Accumulate packets per page (max 255 segments per Ogg page, < 64KB data)
 	const maxPageData = 64 * 1024
+	const maxSegmentsPerPage = 255
 
 	var batchPackets [][]byte
 	var totalSize int
 	var batchGranule int64
 
 	for i, p := range packets {
-		// Convert timestamp from microseconds to 48kHz sample count.
-		// Opus sample rate is 48000 Hz, so:
-		//   samples = tsUs * 48000 / 1_000_000 = tsUs * 48 / 1000
 		granule := p.tsUs * 48 / 1000
-
 		pktData := p.data
-		if len(pktData)+totalSize > maxPageData && len(batchPackets) > 0 {
+
+		// Flush current batch if adding this packet would exceed limits
+		if len(batchPackets) >= maxSegmentsPerPage ||
+			(len(pktData)+totalSize > maxPageData && len(batchPackets) > 0) {
 			writeOggPage(f, serial, &pageSeq, 0x00, batchGranule, batchPackets)
 			batchPackets = nil
 			totalSize = 0
@@ -518,9 +518,9 @@ func WriteOggOpus(packets []opusPacket, outputPath string) error {
 		totalSize += len(pktData)
 		batchGranule = granule
 
-		// Write page immediately if this is a large packet or last packet
+		// Write page when limits reached or this is the last packet
 		isLast := i == len(packets)-1
-		if totalSize > maxPageData || isLast {
+		if isLast || totalSize > maxPageData || len(batchPackets) >= maxSegmentsPerPage {
 			flags := 0x00
 			if isLast {
 				flags = 0x04 // EOS
