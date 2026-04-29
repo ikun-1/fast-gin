@@ -502,9 +502,10 @@ func WriteOggOpus(packets []opusPacket, outputPath string) error {
 	var batchGranule int64
 
 	for i, p := range packets {
-		// Convert timestamp from microseconds to 48kHz sample count
-		// granule_position = samples at 48kHz = tsUs * 48 / 1_000_000 = tsUs * 3 / 62500
-		granule := p.tsUs * 48 / 1_000_000
+		// Convert timestamp from microseconds to 48kHz sample count.
+		// Opus sample rate is 48000 Hz, so:
+		//   samples = tsUs * 48000 / 1_000_000 = tsUs * 48 / 1000
+		granule := p.tsUs * 48 / 1000
 
 		pktData := p.data
 		if len(pktData)+totalSize > maxPageData && len(batchPackets) > 0 {
