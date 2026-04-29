@@ -71,7 +71,6 @@ func (w *IVFRecorderWriter) WriteRTP(pkt *rtp.Packet) error {
 		if pkt.SequenceNumber != expected {
 			w.vp8Buf = w.vp8Buf[:0]
 			w.vp8Started = false
-			w.firstKeyFrameSeen = false
 		}
 	}
 	w.vp8LastSeq = pkt.SequenceNumber
