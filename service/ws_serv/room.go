@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -127,8 +128,25 @@ func (r *Room) ClearRecorder() {
 // ---------- SFU: Track Management ----------
 
 func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-	// Register track info under write lock
 	r.trackMu.Lock()
+
+	// Stop old relay goroutines of the same track kind and remove their entries.
+	// This prevents concurrent writes to the recording when a track is replaced
+	// (e.g., camera → screen share), which would cause alternating RTP sequence
+	// numbers and constant state resets in webmRecorderWriter.writeVideo.
+	kind := remoteTrack.Kind()
+	remaining := make([]*TrackInfo, 0, len(r.TrackLocals[clientID]))
+	for _, info := range r.TrackLocals[clientID] {
+		if info.RemoteTrack.Kind() == kind {
+			if info.StopFn != nil {
+				info.StopFn()
+			}
+		} else {
+			remaining = append(remaining, info)
+		}
+	}
+	r.TrackLocals[clientID] = remaining
+
 	localTrack, err := webrtc.NewTrackLocalStaticRTP(
 		remoteTrack.Codec().RTPCodecCapability,
 		fmt.Sprintf("track_%s_%s", clientID, remoteTrack.ID()),
@@ -163,14 +181,23 @@ func (r *Room) RegisterTrack(clientID string, remoteTrack *webrtc.TrackRemote, r
 			default:
 				n, _, readErr := remoteTrack.Read(buf)
 				if readErr != nil {
-					return
+					zap.S().Warnf("Relay remote track read failed client=%s kind=%s: %s", clientID, kind, readErr)
+					// Don't exit — wait and retry in case the track was replaced
+					// (e.g. screen share resolution renegotiation). The stopCh
+					// will be closed if RegisterTrack replaces this relay.
+					select {
+					case <-stopCh:
+						return
+					case <-time.After(50 * time.Millisecond):
+					}
+					continue
 				}
 				var pkt rtp.Packet
 				if err := pkt.Unmarshal(buf[:n]); err != nil {
 					continue
 				}
 				if writeErr := localTrack.WriteRTP(&pkt); writeErr != nil {
-					return
+					zap.S().Warnf("Relay WriteRTP failed client=%s kind=%s: %s", clientID, kind, writeErr)
 				}
 				// Best-effort recording capture (never blocks the relay)
 				if recorder := r.GetRecorder(); recorder != nil {

@@ -59,6 +59,8 @@ type webmRecorderWriter struct {
 	// Timing
 	videoBaseTS int64 // RTP timestamp of first video frame, for relativization
 	audioBaseTS int64 // RTP timestamp of first audio frame
+	lastFlushedTS int64 // last successfully written frame timestamp (ms), for monotonic adjustment
+	lastAudioFlushedTS int64 // last successfully written audio timestamp (ms)
 
 	// Pending — buffered writes before muxer is ready
 	// Each item includes track number, timestamp, and write function
@@ -180,7 +182,6 @@ func (w *webmRecorderWriter) writeVideo(pkt *rtp.Packet) {
 		if pkt.SequenceNumber != expected {
 			w.vp8Buf = w.vp8Buf[:0]
 			w.vp8Started = false
-			w.firstKeyFrameSeen = false
 		}
 	}
 	w.vp8LastSeq = pkt.SequenceNumber
@@ -240,6 +241,20 @@ func (w *webmRecorderWriter) flushVideoFrameLocked() {
 	}
 	tsMs := (ts - w.videoBaseTS) * 1000 / 90000
 
+	// When a track is replaced (camera -> screen share), the new RTP stream
+	// may use a completely different clock base, producing tsMs values that
+	// jump backward or forward by seconds.  Detect large jumps and rebase
+	// so that WebM timestamps remain continuous.
+	const maxFrameMs int64 = 1000
+	if tsMs > w.lastFlushedTS+maxFrameMs || tsMs < w.lastFlushedTS-maxFrameMs {
+		expected := w.lastFlushedTS + 100 // ~100 ms per frame at 10 fps
+		w.videoBaseTS = ts - expected*90000/1000
+		tsMs = expected
+	} else if tsMs <= w.lastFlushedTS {
+		tsMs = w.lastFlushedTS + 1
+	}
+	w.lastFlushedTS = tsMs
+
 	isKey := w.vp8Buf[0]&0x01 == 0
 
 	if !w.muxerInit {
@@ -280,6 +295,16 @@ func (w *webmRecorderWriter) writeAudio(pkt *rtp.Packet) {
 		w.audioBaseTS = ts
 	}
 	tsMs := (ts - w.audioBaseTS) * 1000 / 48000
+
+	// Same rebase logic as video: track replacement may change the RTP clock base.
+	if tsMs > w.lastAudioFlushedTS+1000 || tsMs < w.lastAudioFlushedTS-1000 {
+		expected := w.lastAudioFlushedTS + 20 // ~20 ms per audio packet
+		w.audioBaseTS = ts - expected*48000/1000
+		tsMs = expected
+	} else if tsMs <= w.lastAudioFlushedTS {
+		tsMs = w.lastAudioFlushedTS + 1
+	}
+	w.lastAudioFlushedTS = tsMs
 
 	if !w.muxerInit {
 		buf := make([]byte, len(pkt.Payload))
