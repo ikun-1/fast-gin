@@ -116,7 +116,7 @@ func (Recording) DetailView(c *gin.Context) {
 			FileSize:    f.FileSize,
 			DownloadURL: filepath.Base(f.FilePath),
 		}
-		if f.Kind == "webm" {
+		if f.Kind == "webm" && rec.Status == "completed" {
 			vo.PlayableURL = fmt.Sprintf("/recordings/%d/files/%d/play", rec.ID, f.ID)
 		}
 		fileVOs = append(fileVOs, vo)
@@ -159,6 +159,11 @@ func (Recording) FilePlayView(c *gin.Context) {
 	var file models.RecordingFile
 	if err := global.DB.WithContext(c).First(&file, uri.FileID).Error; err != nil {
 		res.FailNotFound(c)
+		return
+	}
+
+	if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
+		res.FailWithMsg(c, "录制文件尚未就绪")
 		return
 	}
 
