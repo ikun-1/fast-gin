@@ -247,33 +247,38 @@ func (w *IVFRecorderWriter) Close() error {
 }
 
 // parseVP8Resolution extracts video width/height from a VP8 key frame's bitstream.
+// VP8 stores resolution in macroblock units (16px), the returned values are in pixels.
 func parseVP8Resolution(data []byte) (width, height uint16, ok bool) {
 	if len(data) < 10 || data[0]&0x01 != 0 {
 		return 0, 0, false
 	}
-	// Determine frame tag length (1-3 bytes based on first_partition size)
-	tagLen := 1
-	if len(data) > 1 && data[0]&0x80 != 0 {
-		tagLen = 2
-		if len(data) > 2 && data[1]&0x80 != 0 {
-			tagLen = 3
+	// Try tag length 1-3 to find start code 0x9D, 0x01, 0x2A
+	tagLen := -1
+	for tl := 1; tl <= 3; tl++ {
+		if tl+3 < len(data) && data[tl] == 0x9D && data[tl+1] == 0x01 && data[tl+2] == 0x2A {
+			tagLen = tl
+			break
 		}
 	}
-	if tagLen+3 >= len(data) {
+	if tagLen < 0 {
 		return 0, 0, false
 	}
-	// Verify start code (key frame only)
-	if data[tagLen] != 0x9D || data[tagLen+1] != 0x01 || data[tagLen+2] != 0x2A {
-		return 0, 0, false
-	}
-	// Bool decoder data starts after start code
+	// Bool decoder data starts after start code.
+	// VP8 key frame header: color_space(1) + clamp_type(1) + h_size(14) + v_size(14)
 	bd := newVP8BitReader(data[tagLen+3:])
-	_ = bd.readBit128()                  // horizontal_scale_code (bit 0)
-	ws := bd.readLiteral14()             // horizontal_size_code (14 bits)
-	_ = bd.readBit128()                  // vertical_scale_code (bit 0)
-	hs := bd.readLiteral14()             // vertical_size_code (14 bits)
+	_ = bd.readBit128()      // color_space / horizontal_scale
+	mbs := bd.readLiteral14() // horizontal_size in macroblocks
+	_ = bd.readBit128()       // clamp_type / vertical_scale
+	mbs2 := bd.readLiteral14() // vertical_size in macroblocks
 
-	return uint16(ws), uint16(hs), true
+	if mbs <= 0 || mbs2 <= 0 {
+		return 0, 0, false
+	}
+
+	// Convert macroblock units to pixels (each macroblock = 16x16)
+	width = uint16(mbs) * 16
+	height = uint16(mbs2) * 16
+	return width, height, true
 }
 
 // vp8BitReader is a minimal VP8 boolean decoder for probability-128 reads
@@ -578,17 +583,18 @@ func writeOggPage(f *os.File, serial uint32, seq *uint32, flags int, granule int
 	f.Write(page)
 }
 
-// oggCRC32 table for Ogg CRC-32 (polynomial 0x04C11DB7, reflected 0xEDB88320)
+// oggCRC32 table for Ogg CRC-32 (non-reflected, polynomial 0x04C11DB7)
+// Ogg spec requires MSB-first CRC, not the common reflected CRC-32.
 var oggCRCTab [256]uint32
 
 func init() {
 	for i := 0; i < 256; i++ {
-		c := uint32(i)
+		c := uint32(i) << 24
 		for j := 0; j < 8; j++ {
-			if c&1 != 0 {
-				c = 0xEDB88320 ^ (c >> 1)
+			if c&0x80000000 != 0 {
+				c = (c << 1) ^ 0x04C11DB7
 			} else {
-				c >>= 1
+				c <<= 1
 			}
 		}
 		oggCRCTab[i] = c
@@ -598,7 +604,7 @@ func init() {
 func oggCRC(data []byte) uint32 {
 	c := uint32(0)
 	for _, b := range data {
-		c = oggCRCTab[(byte(c)^b)&0xFF] ^ (c >> 8)
+		c = (c << 8) ^ oggCRCTab[byte(c>>24)^b]
 	}
 	return c
 }
