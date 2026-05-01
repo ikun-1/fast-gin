@@ -28,4 +28,9 @@ func StatsRouter(g *gin.RouterGroup) {
 	g.GET("stats/trend",
 		middleware.AuthMiddleware,
 		h.TrendView)
+
+	g.GET("stats/quality/:id",
+		middleware.AuthMiddleware,
+		middleware.ShouldBindUri[models.BindId],
+		h.QualityReportView)
 }

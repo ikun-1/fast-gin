@@ -1,6 +1,9 @@
 package ws_serv
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ---------- Client -> Server ----------
 
@@ -20,6 +23,8 @@ type WsClientMessage struct {
 	Text string `json:"text,omitempty"`
 	// recording-control
 	Action string `json:"action,omitempty"`
+	// quality-report
+	Metrics json.RawMessage `json:"metrics,omitempty"`
 }
 
 // ---------- Server -> Client ----------
@@ -91,4 +96,24 @@ type RecordingControlData struct {
 	Action     string `json:"action"` // "started" or "stopped"
 	StartedAt  string `json:"startedAt,omitempty"`
 	DurationMs int64  `json:"durationMs,omitempty"`
+}
+
+// Quality metric snapshot from client (browser getStats)
+type QualityMetricSnapshot struct {
+	Label          string    `json:"label"`                    // "audio", "video", "connection"
+	BytesSent      int64     `json:"bytesSent,omitempty"`
+	BytesReceived  int64     `json:"bytesReceived,omitempty"`
+	PacketsSent    int64     `json:"packetsSent,omitempty"`
+	PacketsReceived int64    `json:"packetsReceived,omitempty"`
+	PacketsLost    int64     `json:"packetsLost,omitempty"`
+	JitterMs       float64   `json:"jitterMs,omitempty"`
+	RoundTripMs    float64   `json:"roundTripMs,omitempty"`
+	BitrateKbps    float64   `json:"bitrateKbps,omitempty"`
+	FrameWidth     int       `json:"frameWidth,omitempty"`
+	FrameHeight    int       `json:"frameHeight,omitempty"`
+	FPS            float64   `json:"fps,omitempty"`
+	FramesDecoded  int       `json:"framesDecoded,omitempty"`
+	TotalFramesLost int      `json:"totalFramesLost,omitempty"`
+	CandidateType  string    `json:"candidateType,omitempty"`
+	SnapshotAt     time.Time `json:"snapshotAt"`
 }

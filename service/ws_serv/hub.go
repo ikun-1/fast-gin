@@ -58,6 +58,58 @@ func (h *Hub) Run() {
 	}
 }
 
+func (h *Hub) handleQualityReport(client *Client, msg *WsClientMessage) {
+	if client.MeetingID == 0 || client.RoomNo == 0 {
+		return
+	}
+
+	var metrics []QualityMetricSnapshot
+	if err := json.Unmarshal(msg.Metrics, &metrics); err != nil {
+		zap.S().Warnf("Invalid quality-report from client=%s: %s", client.ClientID, err)
+		return
+	}
+
+	if len(metrics) == 0 {
+		return
+	}
+
+	// Async write to DB — capture values by copy to avoid race with client reuse
+	meetingID := client.MeetingID
+	userID := client.UserID
+	clientID := client.ClientID
+
+	go func() {
+		snapshots := make([]models.MeetingQualitySnapshot, 0, len(metrics))
+		for _, m := range metrics {
+			snapshots = append(snapshots, models.MeetingQualitySnapshot{
+				MeetingID:      meetingID,
+				UserID:         userID,
+				ClientID:       clientID,
+				Label:          m.Label,
+				BytesSent:      m.BytesSent,
+				BytesReceived:  m.BytesReceived,
+				PacketsSent:    m.PacketsSent,
+				PacketsReceived: m.PacketsReceived,
+				PacketsLost:    m.PacketsLost,
+				JitterMs:       m.JitterMs,
+				RoundTripMs:    m.RoundTripMs,
+				BitrateKbps:    m.BitrateKbps,
+				FrameWidth:     m.FrameWidth,
+				FrameHeight:    m.FrameHeight,
+				FPS:            m.FPS,
+				FramesDecoded:  m.FramesDecoded,
+				TotalFramesLost: m.TotalFramesLost,
+				CandidateType:  m.CandidateType,
+				SnapshotAt:     m.SnapshotAt,
+			})
+		}
+
+		if err := global.DB.Create(&snapshots).Error; err != nil {
+			zap.S().Errorf("Failed to save quality-report client=%s: %s", clientID, err)
+		}
+	}()
+}
+
 // negotiationLoop handles renegotiation triggered by OnNegotiationNeeded
 func (h *Hub) negotiationLoop(client *Client) {
 	for range client.negotiateChan {
@@ -87,6 +139,8 @@ func (h *Hub) HandleMessage(client *Client, msg *WsClientMessage) {
 		h.handleChatMessage(client, msg)
 	case "recording-control":
 		h.handleRecordingControl(client, msg)
+	case "quality-report":
+		h.handleQualityReport(client, msg)
 	default:
 		client.SendJSON(WsServerMessage{Type: "error", Data: "unknown message type"})
 	}
@@ -119,6 +173,7 @@ func (h *Hub) handleJoinRoom(client *Client, msg *WsClientMessage) {
 	}
 
 	client.RoomNo = roomNo
+	client.MeetingID = meeting.ID
 	client.IsHost = meeting.HostID == client.UserID
 
 	// Get or create room

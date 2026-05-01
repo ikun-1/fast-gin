@@ -19,6 +19,7 @@ type Client struct {
 	UserID      uint
 	ClientID    string
 	RoomNo      uint
+	MeetingID   uint
 	DisplayName string
 	Avatar      string
 	IsHost      bool
