@@ -46,11 +46,25 @@ func (Meeting) JoinView(c *gin.Context) {
 	}
 
 	// Record participant join
+	// Fetch user display name
+	var user models.User
+	displayName := ""
+	if err := global.DB.WithContext(c).First(&user, claims.UserID).Error; err == nil {
+		if user.Nickname != "" {
+			displayName = user.Nickname
+		} else if user.RealName != "" {
+			displayName = user.RealName
+		} else {
+			displayName = user.Username
+		}
+	}
+
 	participant := &models.MeetingParticipant{
-		MeetingID: meeting.ID,
-		UserID:    claims.UserID,
-		JoinedAt:  time.Now(),
-		IsHost:    meeting.HostID == claims.UserID,
+		MeetingID:   meeting.ID,
+		UserID:      claims.UserID,
+		DisplayName: displayName,
+		JoinedAt:    time.Now(),
+		IsHost:      meeting.HostID == claims.UserID,
 	}
 	if err := global.DB.WithContext(c).Create(participant).Error; err != nil {
 		res.FailWithCode(c, res.DatabaseErr)

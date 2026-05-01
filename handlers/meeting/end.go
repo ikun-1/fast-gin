@@ -39,5 +39,10 @@ func (Meeting) EndView(c *gin.Context) {
 		return
 	}
 
+	// Update all participants' left_at if not already set
+	global.DB.WithContext(c).Model(&models.MeetingParticipant{}).
+		Where("meeting_id = ? AND left_at IS NULL", meeting.ID).
+		Update("left_at", &now)
+
 	res.OkSuccess(c)
 }

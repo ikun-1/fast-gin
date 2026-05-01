@@ -6,6 +6,7 @@ import (
 	"fast-gin/handlers/meeting"
 	"fast-gin/handlers/rbac"
 	"fast-gin/handlers/recording"
+	"fast-gin/handlers/stats"
 	"fast-gin/handlers/user"
 )
 
@@ -16,6 +17,7 @@ type Handler struct {
 	RBAC      rbac.RBAC
 	Meeting   meeting.Meeting
 	Recording recording.Recording
+	Stats     stats.Stats
 }
 
 var Handlers = new(Handler)

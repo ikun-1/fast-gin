@@ -38,6 +38,7 @@ func Run() {
 	MeetingRouter(g)
 	RecordingRouter(g)
 	SignalingRouter(g)
+	StatsRouter(g)
 
 	addr := global.Config.System.Addr()
 	if global.Config.System.Mode == "release" {
