@@ -5,6 +5,8 @@ import (
 	"fast-gin/models"
 	"math"
 	"sort"
+
+	"go.uber.org/zap"
 )
 
 type QualityMetricSummary struct {
@@ -58,6 +60,8 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 		Order("user_id, label, snapshot_at ASC").
 		Find(&snapshots)
 
+	zap.S().Infof("GetMeetingQualityReport: meetingID=%d snapshots=%d", meetingID, len(snapshots))
+
 	if len(snapshots) == 0 {
 		return &MeetingQualityReport{
 			MeetingID: meeting.ID,
@@ -93,14 +97,18 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 	}
 
 	// Compute per-user summaries
-	type labelSummary struct {
-		label   string
-		summary *QualityMetricSummary
-	}
 	var allJitters []float64
 	var allRTTs []float64
-	var totalPacketsLost int64
-	var totalPackets int64
+	// Cumulative packet loss: use the latest snapshot values per user+label
+	// since browser getStats() reports cumulative counters, not deltas.
+	type lossKey struct {
+		userID uint
+		label  string
+	}
+	latestLoss := make(map[lossKey]struct {
+		packetsLost     int64
+		packetsReceived int64
+	})
 
 	users := make([]UserQualitySummary, 0)
 	for key, labelMap := range userGroups {
@@ -130,9 +138,20 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 					if s.RoundTripMs > 0 {
 						allRTTs = append(allRTTs, s.RoundTripMs)
 					}
-					if s.PacketsLost > 0 || s.PacketsReceived > 0 {
-						totalPacketsLost += s.PacketsLost
-						totalPackets += s.PacketsLost + s.PacketsReceived
+					// Only inbound samples (PacketsReceived > 0) have meaningful loss data
+					if s.PacketsReceived > 0 {
+						lk := lossKey{userID: key.UserID, label: label}
+						cur := latestLoss[lk]
+						if s.PacketsReceived > cur.packetsReceived {
+							lost := s.PacketsLost
+							if lost < 0 {
+								lost = 0
+							}
+							latestLoss[lk] = struct {
+								packetsLost     int64
+								packetsReceived int64
+							}{packetsLost: lost, packetsReceived: s.PacketsReceived}
+						}
 					}
 				}
 			}
@@ -175,8 +194,13 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 	overallAvgJitter := mean(allJitters)
 	overallAvgRTT := mean(allRTTs)
 	overallLossRate := 0.0
-	if totalPackets > 0 {
-		overallLossRate = float64(totalPacketsLost) / float64(totalPackets) * 100
+	var sumLost, sumTotal int64
+	for _, v := range latestLoss {
+		sumLost += v.packetsLost
+		sumTotal += v.packetsLost + v.packetsReceived
+	}
+	if sumTotal > 0 {
+		overallLossRate = float64(sumLost) / float64(sumTotal) * 100
 	}
 
 	return &MeetingQualityReport{
@@ -200,13 +224,32 @@ func computeMetricSummary(label string, samples []models.MeetingQualitySnapshot)
 	s := &QualityMetricSummary{Label: label, SampleCount: int64(len(samples))}
 
 	var jitterSum, rttSum, bitrateSum, fpsSum float64
-	var bitrateCount, fpsCount int64
+	var jitterCount, rttCount, bitrateCount, fpsCount int64
+	var packetsLostSum int64
+	var framesWithRecv int64
 	first := true
 
 	for _, sample := range samples {
-		s.AvgPacketsLost += float64(sample.PacketsLost)
-		jitterSum += sample.JitterMs
-		rttSum += sample.RoundTripMs
+		// Only count JitterMs from inbound (bytesReceived > 0) or non-zero values
+		if sample.JitterMs > 0 || sample.BytesReceived > 0 {
+			jitterSum += sample.JitterMs
+			jitterCount++
+		}
+		// Only count RoundTripMs from non-zero values
+		if sample.RoundTripMs > 0 {
+			rttSum += sample.RoundTripMs
+			rttCount++
+		}
+		// PacketsLost: only count inbound samples (PacketsReceived > 0);
+		// browser may report -1 during initial connection, clamp to 0
+		if sample.PacketsReceived > 0 {
+			lost := sample.PacketsLost
+			if lost < 0 {
+				lost = 0
+			}
+			packetsLostSum += lost
+			framesWithRecv++
+		}
 
 		if sample.BitrateKbps > 0 {
 			bitrateSum += sample.BitrateKbps
@@ -217,6 +260,7 @@ func computeMetricSummary(label string, samples []models.MeetingQualitySnapshot)
 			if first || sample.BitrateKbps > s.MaxBitrateKbps {
 				s.MaxBitrateKbps = sample.BitrateKbps
 			}
+			first = false
 		}
 		if label == "video" {
 			fpsSum += sample.FPS
@@ -230,13 +274,16 @@ func computeMetricSummary(label string, samples []models.MeetingQualitySnapshot)
 				s.MaxFrameHeight = sample.FrameHeight
 			}
 		}
-		first = false
 	}
 
-	s.AvgJitterMs = safeAvg(jitterSum, int64(len(samples)))
-	s.AvgRoundTripMs = safeAvg(rttSum, int64(len(samples)))
+	s.AvgJitterMs = safeAvg(jitterSum, jitterCount)
+	s.AvgRoundTripMs = safeAvg(rttSum, rttCount)
 	s.AvgBitrateKbps = safeAvg(bitrateSum, bitrateCount)
 	s.AvgFPS = safeAvg(fpsSum, fpsCount)
+	// Average packets lost per sample that has receive/loss data
+	if framesWithRecv > 0 {
+		s.AvgPacketsLost = math.Round(float64(packetsLostSum)/float64(framesWithRecv)*100) / 100
+	}
 
 	return s
 }

@@ -5,6 +5,7 @@ import (
 	"fast-gin/global"
 	"fast-gin/models"
 	"sync/atomic"
+	"time"
 
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
@@ -60,6 +61,8 @@ func (h *Hub) Run() {
 
 func (h *Hub) handleQualityReport(client *Client, msg *WsClientMessage) {
 	if client.MeetingID == 0 || client.RoomNo == 0 {
+		zap.S().Warnf("quality-report dropped: meetingID=%d roomNo=%d client=%s",
+			client.MeetingID, client.RoomNo, client.ClientID)
 		return
 	}
 
@@ -72,6 +75,9 @@ func (h *Hub) handleQualityReport(client *Client, msg *WsClientMessage) {
 	if len(metrics) == 0 {
 		return
 	}
+
+	zap.S().Infof("quality-report received: client=%s meetingID=%d metrics=%d",
+		client.ClientID, client.MeetingID, len(metrics))
 
 	// Async write to DB — capture values by copy to avoid race with client reuse
 	meetingID := client.MeetingID
@@ -106,6 +112,9 @@ func (h *Hub) handleQualityReport(client *Client, msg *WsClientMessage) {
 
 		if err := global.DB.Create(&snapshots).Error; err != nil {
 			zap.S().Errorf("Failed to save quality-report client=%s: %s", clientID, err)
+		} else {
+			zap.S().Debugf("quality-report saved: client=%s meetingID=%d snapshots=%d",
+				clientID, meetingID, len(snapshots))
 		}
 	}()
 }
@@ -175,6 +184,24 @@ func (h *Hub) handleJoinRoom(client *Client, msg *WsClientMessage) {
 	client.RoomNo = roomNo
 	client.MeetingID = meeting.ID
 	client.IsHost = meeting.HostID == client.UserID
+
+	// Record participant in DB (upsert: skip if already exists for this meeting)
+	var existingCount int64
+	global.DB.Model(&models.MeetingParticipant{}).
+		Where("meeting_id = ? AND user_id = ?", meeting.ID, client.UserID).
+		Count(&existingCount)
+	if existingCount == 0 {
+		participant := &models.MeetingParticipant{
+			MeetingID:   meeting.ID,
+			UserID:      client.UserID,
+			DisplayName: client.DisplayName,
+			JoinedAt:    time.Now(),
+			IsHost:      client.IsHost,
+		}
+		if err := global.DB.Create(participant).Error; err != nil {
+			zap.S().Warnf("Failed to record participant client=%s: %s", client.ClientID, err)
+		}
+	}
 
 	// Get or create room
 	if !exists {
