@@ -16,7 +16,10 @@ func (Meeting) ListView(c *gin.Context) {
 
 	meetings, count, err := common.QueryList(models.Meeting{}, common.QueryOption{
 		PageInfo: page,
-		Where:    global.DB.Where("host_id = ?", claims.UserID),
+		Where:    global.DB.Where("host_id = ?", claims.UserID).
+			Or("id IN (?)", global.DB.Model(&models.MeetingParticipant{}).
+				Select("meeting_id").
+				Where("user_id = ?", claims.UserID)),
 	})
 	if err != nil {
 		res.FailWithCode(c, res.DatabaseErr)

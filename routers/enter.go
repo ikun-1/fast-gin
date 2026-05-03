@@ -13,10 +13,16 @@ import (
 )
 
 var hub *ws_serv.Hub
+var notifHub *ws_serv.NotificationHub
 
 func InitHub() {
 	hub = ws_serv.NewHub()
+	notifHub = ws_serv.NewNotificationHub()
 	go hub.Run()
+}
+
+func GetNotifHub() *ws_serv.NotificationHub {
+	return notifHub
 }
 
 func Run() {
@@ -39,6 +45,7 @@ func Run() {
 	RecordingRouter(g)
 	SignalingRouter(g)
 	StatsRouter(g)
+	NotificationRouter(g)
 
 	addr := global.Config.System.Addr()
 	if global.Config.System.Mode == "release" {
