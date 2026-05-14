@@ -1,8 +1,8 @@
 package stats_serv
 
 import (
-	"fast-gin/global"
-	"fast-gin/models"
+	"context"
+	"fast-gin/dal/query"
 	"time"
 )
 
@@ -66,26 +66,39 @@ type TrendStats struct {
 }
 
 // GetOverviewStats returns system-wide aggregate statistics.
-func GetOverviewStats() (*OverviewStats, error) {
+func GetOverviewStats(ctx context.Context) (*OverviewStats, error) {
 	stats := new(OverviewStats)
+	var err error
 
-	if err := global.DB.Model(&models.Meeting{}).Count(&stats.TotalMeetings).Error; err != nil {
+	stats.TotalMeetings, err = query.Meeting.WithContext(ctx).Count()
+	if err != nil {
 		return nil, err
 	}
-	if err := global.DB.Model(&models.Meeting{}).Where("status = ?", "active").Count(&stats.ActiveMeetings).Error; err != nil {
+
+	stats.ActiveMeetings, err = query.Meeting.WithContext(ctx).Where(query.Meeting.Status.Eq("active")).Count()
+	if err != nil {
 		return nil, err
 	}
-	if err := global.DB.Model(&models.MeetingParticipant{}).Select("COUNT(DISTINCT user_id)").Scan(&stats.TotalParticipants).Error; err != nil {
+
+	stats.TotalParticipants, err = query.MeetingParticipant.WithContext(ctx).Distinct(query.MeetingParticipant.UserID).Count()
+	if err != nil {
 		return nil, err
 	}
-	if err := global.DB.Model(&models.Recording{}).Count(&stats.TotalRecordings).Error; err != nil {
+
+	stats.TotalRecordings, err = query.Recording.WithContext(ctx).Count()
+	if err != nil {
 		return nil, err
 	}
 
 	// Calculate total duration from ended meetings using Go-level time arithmetic
-	var meetings []models.Meeting
-	global.DB.Where("status = ? AND started_at IS NOT NULL AND ended_at IS NOT NULL", "ended").
-		Find(&meetings)
+	meetings, err := query.Meeting.WithContext(ctx).Where(
+		query.Meeting.Status.Eq("ended"),
+		query.Meeting.StartedAt.IsNotNull(),
+		query.Meeting.EndedAt.IsNotNull(),
+	).Find()
+	if err != nil {
+		return nil, err
+	}
 	for _, m := range meetings {
 		stats.TotalDurationMs += m.EndedAt.Sub(*m.StartedAt).Milliseconds()
 	}
@@ -94,9 +107,9 @@ func GetOverviewStats() (*OverviewStats, error) {
 }
 
 // GetMeetingStats returns participation details for a single meeting.
-func GetMeetingStats(meetingID uint) (*MeetingStats, error) {
-	var meeting models.Meeting
-	if err := global.DB.First(&meeting, meetingID).Error; err != nil {
+func GetMeetingStats(ctx context.Context, meetingID uint) (*MeetingStats, error) {
+	meeting, err := query.Meeting.WithContext(ctx).Where(query.Meeting.ID.Eq(meetingID)).First()
+	if err != nil {
 		return nil, err
 	}
 
@@ -114,8 +127,13 @@ func GetMeetingStats(meetingID uint) (*MeetingStats, error) {
 		stats.TotalDurationMs = meeting.EndedAt.Sub(*meeting.StartedAt).Milliseconds()
 	}
 
-	var participants []models.MeetingParticipant
-	global.DB.Where("meeting_id = ?", meetingID).Order("joined_at ASC").Find(&participants)
+	participants, err := query.MeetingParticipant.WithContext(ctx).
+		Where(query.MeetingParticipant.MeetingID.Eq(meetingID)).
+		Order(query.MeetingParticipant.JoinedAt.Asc()).
+		Find()
+	if err != nil {
+		return nil, err
+	}
 
 	now := time.Now()
 	for _, p := range participants {
@@ -146,9 +164,9 @@ func GetMeetingStats(meetingID uint) (*MeetingStats, error) {
 }
 
 // GetUserStats returns meeting participation statistics for a specific user.
-func GetUserStats(userID uint) (*UserStats, error) {
-	var user models.User
-	if err := global.DB.First(&user, userID).Error; err != nil {
+func GetUserStats(ctx context.Context, userID uint) (*UserStats, error) {
+	user, err := query.User.WithContext(ctx).Where(query.User.ID.Eq(userID)).First()
+	if err != nil {
 		return nil, err
 	}
 
@@ -159,16 +177,25 @@ func GetUserStats(userID uint) (*UserStats, error) {
 	}
 
 	// Count total meetings attended
-	global.DB.Model(&models.MeetingParticipant{}).
-		Where("user_id = ?", userID).
-		Select("COUNT(DISTINCT meeting_id)").Scan(&stats.TotalMeetings)
+	stats.TotalMeetings, _ = query.MeetingParticipant.WithContext(ctx).
+		Where(query.MeetingParticipant.UserID.Eq(userID)).
+		Distinct(query.MeetingParticipant.MeetingID).
+		Count()
 
 	// Count meetings hosted
-	global.DB.Model(&models.Meeting{}).Where("host_id = ?", userID).Count(&stats.MeetingsHosted)
+	stats.MeetingsHosted, _ = query.Meeting.WithContext(ctx).
+		Where(query.Meeting.HostID.Eq(userID)).
+		Count()
 
 	// Fetch recent meeting participations
-	var participants []models.MeetingParticipant
-	global.DB.Where("user_id = ?", userID).Order("joined_at DESC").Limit(20).Find(&participants)
+	participants, err := query.MeetingParticipant.WithContext(ctx).
+		Where(query.MeetingParticipant.UserID.Eq(userID)).
+		Order(query.MeetingParticipant.JoinedAt.Desc()).
+		Limit(20).
+		Find()
+	if err != nil {
+		return nil, err
+	}
 
 	now := time.Now()
 	for _, p := range participants {
@@ -176,16 +203,13 @@ func GetUserStats(userID uint) (*UserStats, error) {
 		if leftAt == nil {
 			leftAt = &now
 		}
-		durationMs := leftAt.Sub(p.JoinedAt).Milliseconds()
-		if durationMs < 0 {
-			durationMs = 0
-		}
+		durationMs := max(leftAt.Sub(p.JoinedAt).Milliseconds(), 0)
 		stats.TotalDurationMs += durationMs
 
 		// Fetch meeting info
-		var meeting models.Meeting
 		title := ""
-		if err := global.DB.First(&meeting, p.MeetingID).Error; err == nil {
+		meeting, err := query.Meeting.WithContext(ctx).Where(query.Meeting.ID.Eq(p.MeetingID)).First()
+		if err == nil {
 			title = meeting.Title
 		}
 
@@ -206,7 +230,7 @@ func GetUserStats(userID uint) (*UserStats, error) {
 }
 
 // GetTrendStats returns daily meeting and participant counts for the last N days.
-func GetTrendStats(days int) (*TrendStats, error) {
+func GetTrendStats(ctx context.Context, days int) (*TrendStats, error) {
 	stats := &TrendStats{}
 
 	startDate := time.Now().AddDate(0, 0, -days+1).Truncate(24 * time.Hour)
@@ -219,13 +243,14 @@ func GetTrendStats(days int) (*TrendStats, error) {
 			Date: dayStart.Format("2006-01-02"),
 		}
 
-		global.DB.Model(&models.Meeting{}).
-			Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).
-			Count(&day.Meetings)
+		day.Meetings, _ = query.Meeting.WithContext(ctx).
+			Where(query.Meeting.CreatedAt.Gte(dayStart), query.Meeting.CreatedAt.Lt(dayEnd)).
+			Count()
 
-		global.DB.Model(&models.MeetingParticipant{}).
-			Where("joined_at >= ? AND joined_at < ?", dayStart, dayEnd).
-			Select("COUNT(DISTINCT user_id)").Scan(&day.Participants)
+		day.Participants, _ = query.MeetingParticipant.WithContext(ctx).
+			Where(query.MeetingParticipant.JoinedAt.Gte(dayStart), query.MeetingParticipant.JoinedAt.Lt(dayEnd)).
+			Distinct(query.MeetingParticipant.UserID).
+			Count()
 
 		stats.Days = append(stats.Days, day)
 	}

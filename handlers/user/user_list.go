@@ -1,12 +1,14 @@
 package user
 
 import (
+	"fast-gin/dal/query"
 	"fast-gin/middleware"
 	"fast-gin/models"
 	"fast-gin/service/common"
 	"fast-gin/utils/res"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gen/field"
 )
 
 // UserListView 获取用户列表
@@ -21,12 +23,16 @@ import (
 // @Failure      200  {object}  res.Response       "{"code":3,"msg":"认证失败"}"
 // @Router       /users [get]
 func (User) UserListView(c *gin.Context) {
-	var cr = middleware.GetQuery[models.PageInfo](c)
+	cr := middleware.GetQuery[models.PageInfo](c)
 
-	list, count, _ := common.QueryList(models.User{}, common.QueryOption{
-		PageInfo: cr,
-		Likes:    []string{"username", "nickname"},
-		Debug:    true,
+	list, count, err := common.QueryList(models.User{}, common.QueryOption{
+		PageInfo:   cr,
+		LikeFields: []field.String{query.User.Username, query.User.Nickname},
 	})
+	if err != nil {
+		res.FailWithCode(c, res.DatabaseErr)
+		return
+	}
+
 	res.OkWithList(c, list, count)
 }

@@ -1,7 +1,8 @@
 package stats_serv
 
 import (
-	"fast-gin/global"
+	"context"
+	"fast-gin/dal/query"
 	"fast-gin/models"
 	"math"
 	"sort"
@@ -49,16 +50,19 @@ type MeetingQualityReport struct {
 	OverallAvgLossRate float64                   `json:"overallAvgPacketLossRate"`
 }
 
-func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
-	var meeting models.Meeting
-	if err := global.DB.First(&meeting, meetingID).Error; err != nil {
+func GetMeetingQualityReport(ctx context.Context, meetingID uint) (*MeetingQualityReport, error) {
+	meeting, err := query.Meeting.WithContext(ctx).Where(query.Meeting.ID.Eq(meetingID)).First()
+	if err != nil {
 		return nil, err
 	}
 
-	var snapshots []models.MeetingQualitySnapshot
-	global.DB.Where("meeting_id = ?", meetingID).
-		Order("user_id, label, snapshot_at ASC").
-		Find(&snapshots)
+	snapshots, err := query.MeetingQualitySnapshot.WithContext(ctx).
+		Where(query.MeetingQualitySnapshot.MeetingID.Eq(meetingID)).
+		Order(query.MeetingQualitySnapshot.UserID, query.MeetingQualitySnapshot.Label, query.MeetingQualitySnapshot.SnapshotAt.Asc()).
+		Find()
+	if err != nil {
+		return nil, err
+	}
 
 	zap.S().Infof("GetMeetingQualityReport: meetingID=%d snapshots=%d", meetingID, len(snapshots))
 
@@ -75,22 +79,23 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 		UserID   uint
 		ClientID string
 	}
-	userGroups := make(map[userKey]map[string][]models.MeetingQualitySnapshot)
+	userGroups := make(map[userKey]map[string][]*models.MeetingQualitySnapshot)
 	userDisplayNames := make(map[userKey]string)
 
 	for _, s := range snapshots {
 		key := userKey{UserID: s.UserID, ClientID: s.ClientID}
 		if userGroups[key] == nil {
-			userGroups[key] = make(map[string][]models.MeetingQualitySnapshot)
+			userGroups[key] = make(map[string][]*models.MeetingQualitySnapshot)
 		}
 		userGroups[key][s.Label] = append(userGroups[key][s.Label], s)
 
 		// Get display name from any snapshot of this user
 		if userDisplayNames[key] == "" {
 			// Try to get from participant record
-			var participant models.MeetingParticipant
-			if err := global.DB.Where("meeting_id = ? AND user_id = ?", meetingID, s.UserID).
-				First(&participant).Error; err == nil {
+			participant, err := query.MeetingParticipant.WithContext(ctx).
+				Where(query.MeetingParticipant.MeetingID.Eq(meetingID), query.MeetingParticipant.UserID.Eq(s.UserID)).
+				First()
+			if err == nil {
 				userDisplayNames[key] = participant.DisplayName
 			}
 		}
@@ -99,8 +104,6 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 	// Compute per-user summaries
 	var allJitters []float64
 	var allRTTs []float64
-	// Cumulative packet loss: use the latest snapshot values per user+label
-	// since browser getStats() reports cumulative counters, not deltas.
 	type lossKey struct {
 		userID uint
 		label  string
@@ -138,7 +141,6 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 					if s.RoundTripMs > 0 {
 						allRTTs = append(allRTTs, s.RoundTripMs)
 					}
-					// Only inbound samples (PacketsReceived > 0) have meaningful loss data
 					if s.PacketsReceived > 0 {
 						lk := lossKey{userID: key.UserID, label: label}
 						cur := latestLoss[lk]
@@ -216,7 +218,7 @@ func GetMeetingQualityReport(meetingID uint) (*MeetingQualityReport, error) {
 	}, nil
 }
 
-func computeMetricSummary(label string, samples []models.MeetingQualitySnapshot) *QualityMetricSummary {
+func computeMetricSummary(label string, samples []*models.MeetingQualitySnapshot) *QualityMetricSummary {
 	if len(samples) == 0 {
 		return nil
 	}
@@ -230,18 +232,14 @@ func computeMetricSummary(label string, samples []models.MeetingQualitySnapshot)
 	first := true
 
 	for _, sample := range samples {
-		// Only count JitterMs from inbound (bytesReceived > 0) or non-zero values
 		if sample.JitterMs > 0 || sample.BytesReceived > 0 {
 			jitterSum += sample.JitterMs
 			jitterCount++
 		}
-		// Only count RoundTripMs from non-zero values
 		if sample.RoundTripMs > 0 {
 			rttSum += sample.RoundTripMs
 			rttCount++
 		}
-		// PacketsLost: only count inbound samples (PacketsReceived > 0);
-		// browser may report -1 during initial connection, clamp to 0
 		if sample.PacketsReceived > 0 {
 			lost := sample.PacketsLost
 			if lost < 0 {
@@ -280,7 +278,6 @@ func computeMetricSummary(label string, samples []models.MeetingQualitySnapshot)
 	s.AvgRoundTripMs = safeAvg(rttSum, rttCount)
 	s.AvgBitrateKbps = safeAvg(bitrateSum, bitrateCount)
 	s.AvgFPS = safeAvg(fpsSum, fpsCount)
-	// Average packets lost per sample that has receive/loss data
 	if framesWithRecv > 0 {
 		s.AvgPacketsLost = math.Round(float64(packetsLostSum)/float64(framesWithRecv)*100) / 100
 	}

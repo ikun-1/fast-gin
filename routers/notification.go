@@ -1,7 +1,7 @@
 package routers
 
 import (
-	"fast-gin/global"
+	"fast-gin/dal/query"
 	"fast-gin/handlers"
 	notification_handler "fast-gin/handlers/notification"
 	"fast-gin/middleware"
@@ -30,10 +30,12 @@ func NotificationRouter(g *gin.RouterGroup) {
 
 	g.POST("notifications",
 		middleware.AuthMiddleware,
+		middleware.ShouldBindJSON[notification_handler.CreateNotificationRequest],
 		Notification.CreateView)
 
 	g.GET("notifications",
 		middleware.AuthMiddleware,
+		middleware.ShouldBindQuery[models.PageInfo],
 		Notification.ListView)
 
 	g.GET("notifications/unread-count",
@@ -80,10 +82,12 @@ func NotificationRouter(g *gin.RouterGroup) {
 		notifHub.Register(client)
 
 		// Send initial unread count
-		var count int64
-		global.DB.Model(&models.Notification{}).
-			Where("to_user_id = ? AND status = ?", claims.UserID, "unread").
-			Count(&count)
+		count, err := query.Notification.WithContext(c.Request.Context()).
+			Where(query.Notification.ToUserID.Eq(claims.UserID), query.Notification.Status.Eq("unread")).
+			Count()
+		if err != nil {
+			zap.S().Errorf("Failed to get unread count for user %d: %s", claims.UserID, err)
+		}
 		client.SendJSON(map[string]any{
 			"type":  "unread-count",
 			"count": count,

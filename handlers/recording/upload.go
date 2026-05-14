@@ -2,6 +2,7 @@ package recording
 
 import (
 	"errors"
+	"fast-gin/dal/query"
 	"fast-gin/global"
 	"fast-gin/middleware"
 	"fast-gin/models"
@@ -63,8 +64,8 @@ func (Recording) UploadView(c *gin.Context) {
 	}
 
 	// 验证会议存在，且上传者是主持人
-	var meeting models.Meeting
-	if err := global.DB.Where("room_no = ?", meetingID).First(&meeting).Error; err != nil {
+	meeting, err := query.Meeting.WithContext(c).Where(query.Meeting.RoomNo.Eq(uint(meetingID))).First()
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			res.FailWithMsg(c, "会议不存在")
 		} else {
@@ -110,7 +111,7 @@ func (Recording) UploadView(c *gin.Context) {
 		FileSize:  fileHeader.Size,
 		Duration:  duration,
 	}
-	if err := global.DB.Create(recording).Error; err != nil {
+	if err := query.Recording.WithContext(c).Create(recording); err != nil {
 		os.Remove(fp)
 		res.FailWithMsg(c, "录制记录保存失败")
 		return

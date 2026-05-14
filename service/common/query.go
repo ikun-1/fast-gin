@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"gorm.io/gen/field"
 	"gorm.io/gorm"
 )
 
@@ -14,11 +15,11 @@ var sortFieldRegexp = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // QueryOption 查询选项，包含分页、模糊查询、自定义条件、预加载、调试等
 type QueryOption struct {
-	models.PageInfo          // 包含分页、搜索、排序参数
-	Likes           []string // 模糊查询的字段列表
-	Where           *gorm.DB // 自定义 Where 条件（可选）
-	Preloads        []string // 预加载的关联字段
-	Debug           bool     // 是否开启调试模式
+	models.PageInfo             // 包含分页、搜索、排序参数
+	LikeFields  []field.String // 类型安全的模糊查询字段（传 query.User.Username 等）
+	Where       *gorm.DB       // 自定义 Where 条件（可选）
+	Preloads    []string       // 预加载的关联字段
+	Debug       bool           // 是否开启调试模式
 }
 
 func buildSafeOrder(option QueryOption) string {
@@ -63,18 +64,19 @@ func QueryList[T any](model T, option QueryOption) (list []T, count int64, err e
 	}
 
 	// 5. 模糊查询（Key 不为空且有指定模糊字段时）
-	if option.Key != "" && len(option.Likes) > 0 {
-		// 构建模糊查询条件：OR 连接多个字段的 LIKE
-		likeExpr := ""
-		likeArgs := make([]interface{}, 0, len(option.Likes))
-		for i, column := range option.Likes {
+	if option.Key != "" && len(option.LikeFields) > 0 {
+		likeSQL := strings.Builder{}
+		likeArgs := make([]interface{}, 0, len(option.LikeFields))
+		likeSQL.WriteString("(")
+		for i, f := range option.LikeFields {
 			if i > 0 {
-				likeExpr += " OR "
+				likeSQL.WriteString(" OR ")
 			}
-			likeExpr += fmt.Sprintf("%s LIKE ?", column)
-			likeArgs = append(likeArgs, fmt.Sprintf("%%%s%%", option.Key))
+			likeSQL.WriteString(string(f.ColumnName()) + " LIKE ?")
+			likeArgs = append(likeArgs, "%"+option.Key+"%")
 		}
-		query = query.Where(likeExpr, likeArgs...)
+		likeSQL.WriteString(")")
+		query = query.Where(likeSQL.String(), likeArgs...)
 	}
 
 	// 6. 预加载关联字段

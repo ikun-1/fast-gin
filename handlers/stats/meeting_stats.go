@@ -12,7 +12,7 @@ import (
 func (Stats) MeetingStatsView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindId](c)
 
-	stats, err := stats_serv.GetMeetingStats(uri.ID)
+	stats, err := stats_serv.GetMeetingStats(c.Request.Context(), uri.ID)
 	if err != nil {
 		res.FailNotFound(c)
 		return

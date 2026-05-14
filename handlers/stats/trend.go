@@ -16,7 +16,7 @@ func (Stats) TrendView(c *gin.Context) {
 		}
 	}
 
-	stats, err := stats_serv.GetTrendStats(days)
+	stats, err := stats_serv.GetTrendStats(c.Request.Context(), days)
 	if err != nil {
 		res.FailWithMsg(c, "获取趋势数据失败")
 		return

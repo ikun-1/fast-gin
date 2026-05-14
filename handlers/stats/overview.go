@@ -8,7 +8,7 @@ import (
 )
 
 func (Stats) OverviewView(c *gin.Context) {
-	stats, err := stats_serv.GetOverviewStats()
+	stats, err := stats_serv.GetOverviewStats(c.Request.Context())
 	if err != nil {
 		res.FailWithMsg(c, "获取统计失败")
 		return

@@ -1,6 +1,7 @@
 package ws_serv
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"fast-gin/dal/query"
 	"fast-gin/global"
 	"fast-gin/models"
 
@@ -79,7 +81,7 @@ func NewRecordingSession(roomNo, meetingID, hostID uint) (*RecordingSession, err
 		Status:      "recording",
 		StoragePath: storageDir,
 	}
-	if err := global.DB.Create(rec).Error; err != nil {
+	if err := query.Recording.WithContext(context.Background()).Create(rec); err != nil {
 		os.RemoveAll(storageDir)
 		return nil, fmt.Errorf("create recording db record: %w", err)
 	}
@@ -137,7 +139,7 @@ func (s *RecordingSession) createWriter(clientID string, userID uint, displayNam
 		s.sharedPool[clientID] = cr
 
 		// Create DB record for the final WebM file
-		global.DB.Create(&models.RecordingFile{
+		query.RecordingFile.WithContext(context.Background()).Create(&models.RecordingFile{
 			RecordingID: s.ID,
 			ClientID:    clientID,
 			UserID:      userID,
@@ -234,20 +236,20 @@ func (s *RecordingSession) Stop() (int64, error) {
 
 		// Update file size in DB
 		if stat, err := os.Stat(cr.outputPath); err == nil {
-			global.DB.Model(&models.RecordingFile{}).
-				Where("recording_id = ? AND client_id = ?", s.ID, cr.clientID).
-				Update("file_size", stat.Size())
+			query.RecordingFile.WithContext(context.Background()).Where(
+				query.RecordingFile.RecordingID.Eq(s.ID),
+				query.RecordingFile.ClientID.Eq(cr.clientID),
+			).Update(query.RecordingFile.FileSize, stat.Size())
 		}
 	}
 
 	now := time.Now()
-	updates := map[string]any{
-		"ended_at":    now,
-		"duration_ms": durationMs,
-		"status":      "completed",
-		"file_count":  totalFiles,
-	}
-	if err := global.DB.Model(&models.Recording{}).Where("id = ?", s.ID).Updates(updates).Error; err != nil {
+	if _, err := query.Recording.WithContext(context.Background()).Where(query.Recording.ID.Eq(s.ID)).UpdateSimple(
+		query.Recording.EndedAt.Value(now),
+		query.Recording.DurationMs.Value(durationMs),
+		query.Recording.Status.Value("completed"),
+		query.Recording.FileCount.Value(totalFiles),
+	); err != nil {
 		zap.S().Errorf("Update recording db record failed id=%d: %s", s.ID, err)
 	}
 

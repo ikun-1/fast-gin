@@ -99,3 +99,12 @@ func GetAuth(c *gin.Context) (cl *jwts.MyClaims) {
 	cl, ok = _claims.(*jwts.MyClaims)
 	return
 }
+
+// GetUserID 从上下文中直接获取用户 ID，未认证返回 0
+func GetUserID(c *gin.Context) uint {
+	cl := GetAuth(c)
+	if cl == nil {
+		return 0
+	}
+	return cl.UserID
+}

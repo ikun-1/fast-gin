@@ -2,7 +2,7 @@ package meeting
 
 import (
 	"errors"
-	"fast-gin/global"
+	"fast-gin/dal/query"
 	"fast-gin/middleware"
 	"fast-gin/models"
 	"fast-gin/utils/res"
@@ -16,8 +16,7 @@ func (Meeting) EndView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindRoomNo](c)
 	claims := middleware.GetAuth(c)
 
-	var meeting models.Meeting
-	err := global.DB.WithContext(c).Where("room_no = ?", uri.RoomNo).First(&meeting).Error
+	meeting, err := query.Meeting.WithContext(c).Where(query.Meeting.RoomNo.Eq(uri.RoomNo)).First()
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			res.FailWithMsg(c, "会议不存在")
@@ -33,16 +32,17 @@ func (Meeting) EndView(c *gin.Context) {
 	}
 
 	now := time.Now()
-	if err := global.DB.WithContext(c).Model(&meeting).
-		Updates(map[string]any{"status": "ended", "ended_at": &now}).Error; err != nil {
+	if _, err := query.Meeting.WithContext(c).
+		Where(query.Meeting.ID.Eq(meeting.ID)).
+		UpdateSimple(query.Meeting.Status.Value("ended"), query.Meeting.EndedAt.Value(now)); err != nil {
 		res.FailWithCode(c, res.DatabaseErr)
 		return
 	}
 
 	// Update all participants' left_at if not already set
-	global.DB.WithContext(c).Model(&models.MeetingParticipant{}).
-		Where("meeting_id = ? AND left_at IS NULL", meeting.ID).
-		Update("left_at", &now)
+	query.MeetingParticipant.WithContext(c).
+		Where(query.MeetingParticipant.MeetingID.Eq(meeting.ID), query.MeetingParticipant.LeftAt.IsNull()).
+		Update(query.MeetingParticipant.LeftAt, &now)
 
 	res.OkSuccess(c)
 }

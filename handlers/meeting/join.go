@@ -2,7 +2,7 @@ package meeting
 
 import (
 	"errors"
-	"fast-gin/global"
+	"fast-gin/dal/query"
 	"fast-gin/middleware"
 	"fast-gin/models"
 	"fast-gin/utils/pwd"
@@ -18,8 +18,7 @@ func (Meeting) JoinView(c *gin.Context) {
 	claims := middleware.GetAuth(c)
 	roomNo := middleware.GetUri[models.BindRoomNo](c).RoomNo
 
-	var meeting models.Meeting
-	err := global.DB.WithContext(c).Where("room_no = ?", roomNo).First(&meeting).Error
+	meeting, err := query.Meeting.WithContext(c).Where(query.Meeting.RoomNo.Eq(roomNo)).First()
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			res.FailWithMsg(c, "会议不存在")
@@ -47,9 +46,9 @@ func (Meeting) JoinView(c *gin.Context) {
 
 	// Record participant join
 	// Fetch user display name
-	var user models.User
 	displayName := ""
-	if err := global.DB.WithContext(c).First(&user, claims.UserID).Error; err == nil {
+	user, err := query.User.WithContext(c).Where(query.User.ID.Eq(claims.UserID)).First()
+	if err == nil {
 		if user.Nickname != "" {
 			displayName = user.Nickname
 		} else if user.RealName != "" {
@@ -66,7 +65,7 @@ func (Meeting) JoinView(c *gin.Context) {
 		JoinedAt:    time.Now(),
 		IsHost:      meeting.HostID == claims.UserID,
 	}
-	if err := global.DB.WithContext(c).Create(participant).Error; err != nil {
+	if err := query.MeetingParticipant.WithContext(c).Create(participant); err != nil {
 		res.FailWithCode(c, res.DatabaseErr)
 		return
 	}

@@ -1,7 +1,9 @@
 package ws_serv
 
 import (
+	"context"
 	"encoding/json"
+	"fast-gin/dal/query"
 	"fast-gin/global"
 	"fast-gin/models"
 	"sync/atomic"
@@ -85,9 +87,9 @@ func (h *Hub) handleQualityReport(client *Client, msg *WsClientMessage) {
 	clientID := client.ClientID
 
 	go func() {
-		snapshots := make([]models.MeetingQualitySnapshot, 0, len(metrics))
+		snapshots := make([]*models.MeetingQualitySnapshot, 0, len(metrics))
 		for _, m := range metrics {
-			snapshots = append(snapshots, models.MeetingQualitySnapshot{
+			snapshots = append(snapshots, &models.MeetingQualitySnapshot{
 				MeetingID:      meetingID,
 				UserID:         userID,
 				ClientID:       clientID,
@@ -110,7 +112,7 @@ func (h *Hub) handleQualityReport(client *Client, msg *WsClientMessage) {
 			})
 		}
 
-		if err := global.DB.Create(&snapshots).Error; err != nil {
+		if err := query.MeetingQualitySnapshot.WithContext(context.Background()).CreateInBatches(snapshots, len(snapshots)); err != nil {
 			zap.S().Errorf("Failed to save quality-report client=%s: %s", clientID, err)
 		} else {
 			zap.S().Debugf("quality-report saved: client=%s meetingID=%d snapshots=%d",
@@ -163,8 +165,9 @@ func (h *Hub) handleJoinRoom(client *Client, msg *WsClientMessage) {
 	}
 
 	// Verify meeting exists
-	var meeting models.Meeting
-	if err := global.DB.Where("room_no = ?", roomNo).First(&meeting).Error; err != nil {
+	var meeting *models.Meeting
+	meeting, err := query.Meeting.WithContext(context.Background()).Where(query.Meeting.RoomNo.Eq(roomNo)).First()
+	if err != nil {
 		client.SendJSON(WsServerMessage{Type: "error", Data: "会议不存在"})
 		return
 	}
@@ -186,10 +189,12 @@ func (h *Hub) handleJoinRoom(client *Client, msg *WsClientMessage) {
 	client.IsHost = meeting.HostID == client.UserID
 
 	// Record participant in DB (upsert: skip if already exists for this meeting)
-	var existingCount int64
-	global.DB.Model(&models.MeetingParticipant{}).
-		Where("meeting_id = ? AND user_id = ?", meeting.ID, client.UserID).
-		Count(&existingCount)
+	existingCount, err := query.MeetingParticipant.WithContext(context.Background()).
+		Where(query.MeetingParticipant.MeetingID.Eq(meeting.ID), query.MeetingParticipant.UserID.Eq(client.UserID)).
+		Count()
+	if err != nil {
+		zap.S().Warnf("Failed to check existing participant client=%s: %s", client.ClientID, err)
+	}
 	if existingCount == 0 {
 		participant := &models.MeetingParticipant{
 			MeetingID:   meeting.ID,
@@ -198,7 +203,7 @@ func (h *Hub) handleJoinRoom(client *Client, msg *WsClientMessage) {
 			JoinedAt:    time.Now(),
 			IsHost:      client.IsHost,
 		}
-		if err := global.DB.Create(participant).Error; err != nil {
+		if err := query.MeetingParticipant.WithContext(context.Background()).Create(participant); err != nil {
 			zap.S().Warnf("Failed to record participant client=%s: %s", client.ClientID, err)
 		}
 	}
@@ -490,8 +495,8 @@ func (h *Hub) handleRecordingControl(client *Client, msg *WsClientMessage) {
 			client.SendJSON(WsServerMessage{Type: "error", Data: "录制已在进行中"})
 			return
 		}
-		var meeting models.Meeting
-		if err := global.DB.Where("room_no = ?", client.RoomNo).First(&meeting).Error; err != nil {
+		meeting, err := query.Meeting.WithContext(context.Background()).Where(query.Meeting.RoomNo.Eq(client.RoomNo)).First()
+		if err != nil {
 			client.SendJSON(WsServerMessage{Type: "error", Data: "会议不存在"})
 			return
 		}

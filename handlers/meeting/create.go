@@ -1,7 +1,7 @@
 package meeting
 
 import (
-	"fast-gin/global"
+	"fast-gin/dal/query"
 	"fast-gin/middleware"
 	"fast-gin/models"
 	"fast-gin/utils/pwd"
@@ -19,8 +19,11 @@ func (Meeting) CreateView(c *gin.Context) {
 	var roomNo uint
 	for {
 		roomNo = uint(rand.Intn(900000) + 100000)
-		var count int64
-		global.DB.WithContext(c).Model(&models.Meeting{}).Where("room_no = ?", roomNo).Count(&count)
+		count, err := query.Meeting.WithContext(c).Where(query.Meeting.RoomNo.Eq(roomNo)).Count()
+		if err != nil {
+			res.FailWithCode(c, res.DatabaseErr)
+			return
+		}
 		if count == 0 {
 			break
 		}
@@ -41,7 +44,7 @@ func (Meeting) CreateView(c *gin.Context) {
 		meeting.Password = hash
 	}
 
-	if err := global.DB.WithContext(c).Create(meeting).Error; err != nil {
+	if err := query.Meeting.WithContext(c).Create(meeting); err != nil {
 		res.FailWithCode(c, res.DatabaseErr)
 		return
 	}

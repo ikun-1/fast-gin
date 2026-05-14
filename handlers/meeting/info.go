@@ -3,7 +3,6 @@ package meeting
 import (
 	"errors"
 	"fast-gin/dal/query"
-	"fast-gin/global"
 	"fast-gin/middleware"
 	"fast-gin/models"
 	"fast-gin/utils/res"
@@ -15,8 +14,7 @@ import (
 func (Meeting) InfoView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindRoomNo](c)
 
-	var meeting models.Meeting
-	err := global.DB.WithContext(c).Where("room_no = ?", uri.RoomNo).First(&meeting).Error
+	meeting, err := query.Meeting.WithContext(c).Where(query.Meeting.RoomNo.Eq(uri.RoomNo)).First()
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			res.FailWithMsg(c, "会议不存在")

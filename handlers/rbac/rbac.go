@@ -11,6 +11,7 @@ import (
 	"fast-gin/utils/res"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gen/field"
 	"gorm.io/gorm"
 )
 
@@ -149,10 +150,16 @@ func isRoleInheritanceCycle(roleID uint, parentID uint) bool {
 // @Router       /rbac/roles [get]
 func (RBAC) ListRoles(c *gin.Context) {
 	pageInfo := middleware.GetQuery[models.PageInfo](c)
-	list, count, _ := common.QueryList(models.Role{}, common.QueryOption{
-		PageInfo: pageInfo,
-		Likes:    []string{"name", "code"},
+
+	list, count, err := common.QueryList(models.Role{}, common.QueryOption{
+		PageInfo:   pageInfo,
+		LikeFields: []field.String{query.Role.Name, query.Role.Code},
 	})
+	if err != nil {
+		res.FailWithCode(c, res.DatabaseErr)
+		return
+	}
+
 	res.OkWithList(c, list, count)
 }
 
@@ -389,10 +396,16 @@ func (RBAC) RewarmPermissionCache(c *gin.Context) {
 // @Router       /rbac/permissions [get]
 func (RBAC) ListPermissions(c *gin.Context) {
 	pageInfo := middleware.GetQuery[models.PageInfo](c)
-	list, count, _ := common.QueryList(models.Permission{}, common.QueryOption{
-		PageInfo: pageInfo,
-		Likes:    []string{"name", "code"},
+
+	list, count, err := common.QueryList(models.Permission{}, common.QueryOption{
+		PageInfo:   pageInfo,
+		LikeFields: []field.String{query.Permission.Name, query.Permission.Code},
 	})
+	if err != nil {
+		res.FailWithCode(c, res.DatabaseErr)
+		return
+	}
+
 	res.OkWithList(c, list, count)
 }
 

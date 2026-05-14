@@ -1,9 +1,11 @@
 package recording
 
 import (
+	"fast-gin/dal/query"
 	"fast-gin/global"
 	"fast-gin/middleware"
 	"fast-gin/models"
+	"fast-gin/service/common"
 	"fast-gin/utils/res"
 	"fmt"
 	"os"
@@ -50,14 +52,15 @@ func (Recording) ListView(c *gin.Context) {
 	claims := middleware.GetAuth(c)
 	page := middleware.GetQuery[models.PageInfo](c)
 
-	var recordings []models.Recording
-	query := global.DB.WithContext(c).Where("host_id = ?", claims.UserID)
-	var count int64
-	if err := query.Model(&models.Recording{}).Count(&count).Error; err != nil {
-		res.FailWithCode(c, res.DatabaseErr)
-		return
-	}
-	if err := query.Order("started_at desc").Offset((page.Page - 1) * page.Limit).Limit(page.Limit).Find(&recordings).Error; err != nil {
+	// Recording list defaults to sort by started_at desc
+	page.SortBy = "started_at"
+	page.SortDir = "desc"
+
+	recordings, count, err := common.QueryList(models.Recording{}, common.QueryOption{
+		PageInfo: page,
+		Where:    global.DB.Where(query.Recording.HostID.Eq(claims.UserID)),
+	})
+	if err != nil {
 		res.FailWithCode(c, res.DatabaseErr)
 		return
 	}
@@ -65,8 +68,8 @@ func (Recording) ListView(c *gin.Context) {
 	list := make([]RecordingListItem, 0, len(recordings))
 	for _, rec := range recordings {
 		var title string
-		var meeting models.Meeting
-		if err := global.DB.Where("id = ?", rec.MeetingID).First(&meeting).Error; err == nil {
+		meeting, err := query.Meeting.WithContext(c).Where(query.Meeting.ID.Eq(rec.MeetingID)).First()
+		if err == nil {
 			title = meeting.Title
 		}
 		item := RecordingListItem{
@@ -90,20 +93,23 @@ func (Recording) ListView(c *gin.Context) {
 func (Recording) DetailView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindId](c)
 
-	var rec models.Recording
-	if err := global.DB.WithContext(c).First(&rec, uri.ID).Error; err != nil {
+	rec, err := query.Recording.WithContext(c).Where(query.Recording.ID.Eq(uri.ID)).First()
+	if err != nil {
 		res.FailNotFound(c)
 		return
 	}
 
 	var title string
-	var meeting models.Meeting
-	if err := global.DB.Where("id = ?", rec.MeetingID).First(&meeting).Error; err == nil {
+	meeting, err := query.Meeting.WithContext(c).Where(query.Meeting.ID.Eq(rec.MeetingID)).First()
+	if err == nil {
 		title = meeting.Title
 	}
 
-	var files []models.RecordingFile
-	global.DB.WithContext(c).Where("recording_id = ?", rec.ID).Find(&files)
+	files, err := query.RecordingFile.WithContext(c).Where(query.RecordingFile.RecordingID.Eq(rec.ID)).Find()
+	if err != nil {
+		res.FailWithCode(c, res.DatabaseErr)
+		return
+	}
 
 	fileVOs := make([]RecordingFileVO, 0, len(files))
 	for _, f := range files {
@@ -144,8 +150,8 @@ func (Recording) DetailView(c *gin.Context) {
 func (Recording) FileDownloadView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindFileId](c)
 
-	var file models.RecordingFile
-	if err := global.DB.WithContext(c).First(&file, uri.FileID).Error; err != nil {
+	file, err := query.RecordingFile.WithContext(c).Where(query.RecordingFile.ID.Eq(uri.FileID)).First()
+	if err != nil {
 		res.FailNotFound(c)
 		return
 	}
@@ -156,8 +162,8 @@ func (Recording) FileDownloadView(c *gin.Context) {
 func (Recording) FilePlayView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindFileId](c)
 
-	var file models.RecordingFile
-	if err := global.DB.WithContext(c).First(&file, uri.FileID).Error; err != nil {
+	file, err := query.RecordingFile.WithContext(c).Where(query.RecordingFile.ID.Eq(uri.FileID)).First()
+	if err != nil {
 		res.FailNotFound(c)
 		return
 	}
@@ -174,8 +180,8 @@ func (Recording) DeleteView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindId](c)
 	claims := middleware.GetAuth(c)
 
-	var rec models.Recording
-	if err := global.DB.WithContext(c).First(&rec, uri.ID).Error; err != nil {
+	rec, err := query.Recording.WithContext(c).Where(query.Recording.ID.Eq(uri.ID)).First()
+	if err != nil {
 		res.FailNotFound(c)
 		return
 	}
@@ -189,8 +195,8 @@ func (Recording) DeleteView(c *gin.Context) {
 	os.RemoveAll(rec.StoragePath)
 
 	// Delete file records
-	global.DB.WithContext(c).Where("recording_id = ?", rec.ID).Delete(&models.RecordingFile{})
-	global.DB.WithContext(c).Delete(&rec)
+	query.RecordingFile.WithContext(c).Where(query.RecordingFile.RecordingID.Eq(rec.ID)).Delete()
+	query.Recording.WithContext(c).Delete(rec)
 
 	res.OkSuccess(c)
 }

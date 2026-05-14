@@ -12,7 +12,7 @@ import (
 func (Stats) UserStatsView(c *gin.Context) {
 	uri := middleware.GetUri[models.BindId](c)
 
-	stats, err := stats_serv.GetUserStats(uri.ID)
+	stats, err := stats_serv.GetUserStats(c.Request.Context(), uri.ID)
 	if err != nil {
 		res.FailNotFound(c)
 		return

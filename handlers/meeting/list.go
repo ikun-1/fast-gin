@@ -1,6 +1,7 @@
 package meeting
 
 import (
+	"fast-gin/dal/query"
 	"fast-gin/global"
 	"fast-gin/middleware"
 	"fast-gin/models"
@@ -14,17 +15,26 @@ func (Meeting) ListView(c *gin.Context) {
 	claims := middleware.GetAuth(c)
 	page := middleware.GetQuery[models.PageInfo](c)
 
-	meetings, count, err := common.QueryList(models.Meeting{}, common.QueryOption{
+	// Get meetings the user participated in
+	participatedIDs := make([]uint, 0)
+	query.MeetingParticipant.WithContext(c).
+		Where(query.MeetingParticipant.UserID.Eq(claims.UserID)).
+		Pluck(query.MeetingParticipant.MeetingID, &participatedIDs)
+
+	// Build OR condition: host_id = userID OR id IN (participated meetings)
+	where := global.DB.Where(query.Meeting.HostID.Eq(claims.UserID))
+	if len(participatedIDs) > 0 {
+		where = where.Or(query.Meeting.ID.In(participatedIDs...))
+	}
+
+	list, count, err := common.QueryList(models.Meeting{}, common.QueryOption{
 		PageInfo: page,
-		Where:    global.DB.Where("host_id = ?", claims.UserID).
-			Or("id IN (?)", global.DB.Model(&models.MeetingParticipant{}).
-				Select("meeting_id").
-				Where("user_id = ?", claims.UserID)),
+		Where:    where,
 	})
 	if err != nil {
 		res.FailWithCode(c, res.DatabaseErr)
 		return
 	}
 
-	res.OkWithList(c, meetings, count)
+	res.OkWithList(c, list, count)
 }
