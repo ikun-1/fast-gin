@@ -46,6 +46,7 @@ func Run() {
 	SignalingRouter(g)
 	StatsRouter(g)
 	NotificationRouter(g)
+		ConfigRouter(g)
 
 	addr := global.Config.System.Addr()
 	if global.Config.System.Mode == "release" {

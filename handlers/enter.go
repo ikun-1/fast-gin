@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fast-gin/handlers/captcha"
+	"fast-gin/handlers/config"
 	"fast-gin/handlers/image"
 	"fast-gin/handlers/meeting"
 	"fast-gin/handlers/notification"
@@ -20,6 +21,7 @@ type Handler struct {
 	Recording    recording.Recording
 	Stats        stats.Stats
 	Notification notification.Notification
+	Config       config.Config
 }
 
 var Handlers = new(Handler)
