@@ -250,6 +250,9 @@ func (w *IVFRecorderWriter) Close() error {
 	w.mu.Unlock()
 
 	if file != nil {
+		if err := file.Sync(); err != nil {
+				zap.S().Warnf("Sync IVF file failed path=%s: %s", w.filePath, err)
+			}
 		if err := file.Close(); err != nil {
 			zap.S().Warnf("Close IVF file failed path=%s: %s", w.filePath, err)
 			return err
@@ -697,18 +700,22 @@ func (cr *ClientRecorder) Remux(ffmpegPath string) error {
 	if oggPath != "" {
 		args = append(args, "-map", "1")
 	}
-	args = append(args, "-c", "copy")
-	// If we have both inputs, flag the output as WebM
+	args = append(args, "-c:v", "copy")
 	if oggPath != "" {
-		args = append(args, "-f", "webm")
+		args = append(args, "-c:a", "copy")
 	}
+	args = append(args, "-f", "webm")
 	args = append(args, cr.outputPath)
 
 	zap.S().Infof("Remux cmd: %s %v", ffmpegPath, args)
 	cmd := exec.Command(ffmpegPath, args...)
-	if output, err := cmd.CombinedOutput(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
 		_ = os.Remove(cr.outputPath)
 		return fmt.Errorf("ffmpeg remux failed: %s output=%s", err, strings.TrimSpace(string(output)))
+	}
+	if out := strings.TrimSpace(string(output)); out != "" {
+		zap.S().Warnf("ffmpeg remux warnings: %s", out)
 	}
 
 	// Step 4: Clean up temp files

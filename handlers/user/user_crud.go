@@ -145,6 +145,21 @@ func (User) CreateUserView(c *gin.Context) {
 		return
 	}
 
+	// 为新用户分配默认角色 "user"
+	role, roleErr := query.Role.WithContext(c).
+		Where(query.Role.Code.Eq("user"), query.Role.Status.Eq(1)).
+		Take()
+	if roleErr != nil {
+		zap.S().Warnf("未找到默认角色'user', 用户将无角色权限 userID=%d err=%v", user.ID, roleErr)
+	} else {
+		if rErr := query.UserRole.WithContext(c).Create(&models.UserRole{
+			UserID: user.ID,
+			RoleID: role.ID,
+		}); rErr != nil {
+			zap.S().Warnf("分配默认角色失败 userID=%d roleID=%d err=%v", user.ID, role.ID, rErr)
+		}
+	}
+
 	res.OkWithData(c, user)
 }
 

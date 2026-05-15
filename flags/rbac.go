@@ -7,7 +7,9 @@ import (
 	"fast-gin/models"
 	"fast-gin/permissions"
 	"fmt"
+	"sort"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -353,4 +355,132 @@ func (RBAC) RevokeRolePermission() {
 	}
 
 	fmt.Println("删除角色权限关联成功")
+}
+
+// InitRBAC 非交互式初始化默认 RBAC 数据（角色、权限、关联）
+// 在部署时由 docker-entrypoint.sh 调用
+func (RBAC) InitRBAC() {
+	ctx := context.Background()
+
+	// 1. 创建/获取默认角色
+	roleNames := map[string]string{
+		"admin": "系统管理员",
+		"user":  "普通用户",
+	}
+	roleIDs := make(map[string]uint)
+
+	for code, name := range roleNames {
+		role, err := query.Role.WithContext(ctx).
+			Where(query.Role.Code.Eq(code)).
+			Take()
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				zap.S().Errorf("查询角色[%s]失败: %v", code, err)
+				continue
+			}
+			// 角色不存在，创建
+			role = &models.Role{
+				Name:        name,
+				Code:        code,
+				Description: "自动初始化",
+				Status:      1,
+			}
+			if err := query.Role.WithContext(ctx).Create(role); err != nil {
+				zap.S().Errorf("创建角色[%s]失败: %v", code, err)
+				continue
+			}
+			zap.S().Infof("创建默认角色成功 code=%s name=%s id=%d", code, name, role.ID)
+		}
+		roleIDs[code] = role.ID
+	}
+
+	// 2. 遍历已注册的权限代码，创建权限记录
+	// PermCode 在 init() 阶段已从各子包收集完毕
+	type permEntry struct {
+		code string
+		bit  permissions.PermissionBit
+	}
+	var permEntries []permEntry
+	for bit, code := range permissions.PermCode {
+		permEntries = append(permEntries, permEntry{code: code, bit: bit})
+	}
+	sort.Slice(permEntries, func(i, j int) bool {
+		return permEntries[i].bit < permEntries[j].bit
+	})
+
+	permIDs := make(map[permissions.PermissionBit]uint)
+	for _, entry := range permEntries {
+		perm, err := query.Permission.WithContext(ctx).
+			Where(query.Permission.Code.Eq(entry.code)).
+			Take()
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				zap.S().Errorf("查询权限[%s]失败: %v", entry.code, err)
+				continue
+			}
+			perm = &models.Permission{
+				Code:   entry.code,
+				Name:   entry.code,
+				Module: "system",
+				Type:   3, // 按钮权限
+			}
+			if err := query.Permission.WithContext(ctx).Create(perm); err != nil {
+				zap.S().Errorf("创建权限[%s]失败: %v", entry.code, err)
+				continue
+			}
+			zap.S().Infof("创建默认权限成功 code=%s id=%d", entry.code, perm.ID)
+		}
+		permIDs[entry.bit] = perm.ID
+	}
+
+	// 3. 为 admin 角色绑定所有权限
+	if adminRoleID, ok := roleIDs["admin"]; ok {
+		for _, entry := range permEntries {
+			permID, ok := permIDs[entry.bit]
+			if !ok {
+				continue
+			}
+			_, err := query.RolePermission.WithContext(ctx).
+				Where(query.RolePermission.RoleID.Eq(adminRoleID), query.RolePermission.PermID.Eq(permID)).
+				Take()
+			if err == nil {
+				continue // 已绑定
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+			_ = query.RolePermission.WithContext(ctx).Create(&models.RolePermission{
+				RoleID: adminRoleID,
+				PermID: permID,
+			})
+		}
+		zap.S().Infof("admin 角色权限绑定完成, 共 %d 个权限", len(permEntries))
+	}
+
+	// 4. 为 user 角色绑定基础权限（image:upload, image:delete）
+	if userRoleID, ok := roleIDs["user"]; ok {
+		userPermCodes := []string{"image:upload", "image:delete"}
+		for _, code := range userPermCodes {
+			perm, err := query.Permission.WithContext(ctx).
+				Where(query.Permission.Code.Eq(code)).
+				Take()
+			if err != nil {
+				zap.S().Warnf("权限[%s]不存在，跳过 user 角色绑定", code)
+				continue
+			}
+			_, err = query.RolePermission.WithContext(ctx).
+				Where(query.RolePermission.RoleID.Eq(userRoleID), query.RolePermission.PermID.Eq(perm.ID)).
+				Take()
+			if err == nil {
+				continue
+			}
+			_ = query.RolePermission.WithContext(ctx).Create(&models.RolePermission{
+				RoleID: userRoleID,
+				PermID: perm.ID,
+			})
+		}
+		zap.S().Infof("user 角色基础权限绑定完成")
+	}
+
+	zap.S().Info("RBAC 初始化完成")
 }

@@ -60,6 +60,8 @@ func Run() {
 			rbac.RevokeUserRole()
 		case "revoke-role-perm":
 			rbac.RevokeRolePermission()
+		case "init":
+			rbac.InitRBAC()
 		}
 		os.Exit(0)
 	}
