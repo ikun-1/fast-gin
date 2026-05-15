@@ -81,6 +81,7 @@ func (w *IVFRecorderWriter) WriteRTP(pkt *rtp.Packet) error {
 			if w.pliFn != nil {
 				w.pliFn()
 			}
+			w.firstKeyFrameSeen = false // 丢包后等待关键帧，避免残破的增量帧写入文件
 		}
 	}
 	w.vp8LastSeq = pkt.SequenceNumber

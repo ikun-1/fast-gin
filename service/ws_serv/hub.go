@@ -531,8 +531,13 @@ func (h *Hub) handleRecordingControl(client *Client, msg *WsClientMessage) {
 				}
 			}
 		}
-		// Request key frames from all video sources so the recording
-		// contains a key frame to start decoding from
+		room.trackMu.RUnlock()
+		room.SetRecorder(session)
+
+		// Request key frames after the recorder is set on the room,
+		// otherwise relay goroutines discard incoming key frames
+		// because r.GetRecorder() is still nil.
+		room.trackMu.RLock()
 		for srcID, tracks := range room.TrackLocals {
 			for _, info := range tracks {
 				if info.RemoteTrack.Kind() == webrtc.RTPCodecTypeVideo {
@@ -552,7 +557,6 @@ func (h *Hub) handleRecordingControl(client *Client, msg *WsClientMessage) {
 			}
 		}
 		room.trackMu.RUnlock()
-		room.SetRecorder(session)
 		room.Broadcast(WsServerMessage{
 			Type: "recording-started",
 			Data: RecordingControlData{
