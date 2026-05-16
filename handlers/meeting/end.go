@@ -5,6 +5,7 @@ import (
 	"fast-gin/dal/query"
 	"fast-gin/middleware"
 	"fast-gin/models"
+	"fast-gin/service/ws_serv"
 	"fast-gin/utils/res"
 	"time"
 
@@ -29,6 +30,11 @@ func (Meeting) EndView(c *gin.Context) {
 	if meeting.HostID != claims.UserID {
 		res.FailPermission(c)
 		return
+	}
+
+	// Stop active recording if any (async — remux via ffmpeg can take seconds)
+	if ws_serv.GlobalRecordingManager.IsRecording(uri.RoomNo) {
+		go ws_serv.GlobalRecordingManager.StopSession(uri.RoomNo)
 	}
 
 	now := time.Now()
