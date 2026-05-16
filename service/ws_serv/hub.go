@@ -537,6 +537,10 @@ func (h *Hub) handleRecordingControl(client *Client, msg *WsClientMessage) {
 		// Request key frames after the recorder is set on the room,
 		// otherwise relay goroutines discard incoming key frames
 		// because r.GetRecorder() is still nil.
+		// Send 3 PLI requests per source at 100ms intervals to ensure the
+		// browser generates a valid keyframe promptly. A single PLI often
+		// produces a low-quality "warmup" keyframe, followed by a multi-second
+		// gap before the encoder delivers usable frames.
 		room.trackMu.RLock()
 		for srcID, tracks := range room.TrackLocals {
 			for _, info := range tracks {
@@ -545,13 +549,18 @@ func (h *Hub) handleRecordingControl(client *Client, msg *WsClientMessage) {
 					srcClient, ok := room.Clients[srcID]
 					room.mu.RUnlock()
 					if ok && srcClient.PC != nil {
-						go func(ssrc webrtc.SSRC, pc *webrtc.PeerConnection) {
-							if err := pc.WriteRTCP([]rtcp.Packet{
-								&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)},
-							}); err != nil {
-								zap.S().Warnf("Recording PLI failed client=%s: %s", srcID, err)
-							}
-						}(info.RemoteTrack.SSRC(), srcClient.PC)
+						ssrc := info.RemoteTrack.SSRC()
+						pc := srcClient.PC
+						for i := 0; i < 3; i++ {
+							go func(s webrtc.SSRC, p *webrtc.PeerConnection) {
+								if err := p.WriteRTCP([]rtcp.Packet{
+									&rtcp.PictureLossIndication{MediaSSRC: uint32(s)},
+								}); err != nil {
+									zap.S().Warnf("Recording PLI failed ssrc=%d: %s", s, err)
+								}
+							}(ssrc, pc)
+							time.Sleep(100 * time.Millisecond)
+						}
 					}
 				}
 			}
